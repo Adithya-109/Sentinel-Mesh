@@ -1,0 +1,95 @@
+[
+  {
+    "id": "malicious_1",
+    "type": "email",
+    "path": "emails/malicious_1.txt",
+    "source": "CEAS_08",
+    "expected_malicious": true,
+    "description": "held-out malicious email (CEAS_08)"
+  },
+  {
+    "id": "malicious_1_padded",
+    "type": "email",
+    "path": "emails/malicious_1_padded.txt",
+    "source": "CEAS_08",
+    "expected_malicious": true,
+    "description": "malicious_1 padded with legit text -- red-team beat"
+  },
+  {
+    "id": "malicious_2",
+    "type": "email",
+    "path": "emails/malicious_2.txt",
+    "source": "CEAS_08",
+    "expected_malicious": true,
+    "description": "held-out malicious email (CEAS_08)"
+  },
+  {
+    "id": "malicious_3",
+    "type": "email",
+    "path": "emails/malicious_3.txt",
+    "source": "Enron",
+    "expected_malicious": true,
+    "description": "held-out malicious email (Enron)"
+  },
+  {
+    "id": "legit_1",
+    "type": "email",
+    "path": "emails/legit_1.txt",
+    "source": "CEAS_08",
+    "expected_malicious": false,
+    "description": "held-out legit email (CEAS_08)"
+  },
+  {
+    "id": "legit_2",
+    "type": "email",
+    "path": "emails/legit_2.txt",
+    "source": "Enron",
+    "expected_malicious": false,
+    "description": "held-out legit email (Enron)"
+  },
+  {
+    "id": "malicious_file_1",
+    "type": "file_features",
+    "path": "malicious_features_demo.json",
+    "index": 0,
+    "expected_malicious": true,
+    "description": "held-out malicious PE feature row"
+  },
+  {
+    "id": "malicious_file_2",
+    "type": "file_features",
+    "path": "malicious_features_demo.json",
+    "index": 1,
+    "expected_malicious": true,
+    "description": "held-out malicious PE feature row"
+  },
+  {
+    "id": "malicious_file_3",
+    "type": "file_features",
+    "path": "malicious_features_demo.json",
+    "index": 2,
+    "expected_malicious": true,
+    "description": "held-out malicious PE feature row"
+  },
+  {
+    "id": "benign_file_1",
+    "type": "file_upload",
+    "path": "../benign/extracted/pip_numpy/numpy/fft/_pocketfft_umath.cp312-win_amd64.pyd",
+    "expected_malicious": false,
+    "description": "real benign binary, scanned live"
+  },
+  {
+    "id": "benign_file_2",
+    "type": "file_upload",
+    "path": "../benign/extracted/npm_esbuild-win32-x64-0.28.2/package/esbuild.exe",
+    "expected_malicious": false,
+    "description": "real benign binary, scanned live"
+  },
+  {
+    "id": "benign_file_3",
+    "type": "file_upload",
+    "path": "C:\\Windows\\System32\\notepad.exe",
+    "expected_malicious": false,
+    "description": "real benign binary, scanned live"
+  }
+]

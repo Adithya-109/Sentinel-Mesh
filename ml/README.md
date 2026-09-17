@@ -77,7 +77,20 @@ curl -X POST http://localhost:8001/score/file -H "Content-Type: application/json
   -d "{\"features\": $(python -c "import json;print(json.dumps(json.load(open('demo/malicious_features.json'))[0]))")}"
 ```
 
-## 5. Phase 2: FieldGuard on-device model
+## 5. Run the live-demo script
+
+```
+cd demo
+python build_demo_fixtures.py --data "path/to/security"
+python run_demo.py
+```
+
+Walks held-out malicious/legit emails (plus a padded red-team one),
+held-out malicious file features, and real benign binaries through the
+service, in the brief's demo order, and posts each Event to the console
+if one is listening. See `demo/README.md`.
+
+## 6. Phase 2: FieldGuard on-device model
 
 Waits on `data/traces/*.jsonl` (one file per recording session, each line
 a `Trace` row per the contract). Once present:
