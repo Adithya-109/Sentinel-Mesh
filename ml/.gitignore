@@ -5,6 +5,8 @@ scratch_audit/
 
 # raw external inputs — large, not meant for git
 benign/pip_downloads/
+benign/pip_downloads_win_amd64/
+benign/pip_downloads_win32/
 benign/npm_downloads/
 benign/extracted/
 benign/*.log
@@ -16,3 +18,17 @@ data/traces/*.jsonl
 
 # trained model artifacts can be large; keep small ones (mailguard) but not big ones by default
 models/*.bin
+
+# field-model test pipeline: deterministic, regenerate with
+# `make test-field-model` -- only the scripts are committed
+tests/synthetic_traces/
+tests/synthetic_field_model.h
+tests/synthetic_field_model_metrics.json
+tests/parity_features.csv
+tests/field_model_harness.exe
+tests/field_model_harness.out
+tests/*.o
+
+# the real field model is only meaningful once real traces exist
+export/field_model.h
+reports/field_model_metrics.json
