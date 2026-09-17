@@ -94,7 +94,7 @@ async def score_file(request: Request):
         details = {}
 
     x_row = x.values.astype(float)
-    score = float(_file["model"].predict_proba(x_row.reshape(1, -1))[:, 1][0])
+    score = float(_file["model"].predict_proba(pd.DataFrame([x_row], columns=cols))[:, 1][0])
     is_malicious = score >= _file["threshold"]
     reasons = fileguard.explain(_file["model"], cols, x_row)
     return file_event(is_malicious, score, reasons, details=details)

@@ -8,6 +8,9 @@ benign/pip_downloads/
 benign/npm_downloads/
 benign/extracted/
 benign/*.log
+benign/pkg_list.txt
+build_all.log
+service.log
 data/security/
 data/traces/*.jsonl
 

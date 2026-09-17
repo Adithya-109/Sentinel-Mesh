@@ -1,0 +1,126 @@
+{
+  "mailguard": {
+    "email_dedup_rows": 75631,
+    "per_corpus": {
+      "CEAS_08": {
+        "n": 35250,
+        "malicious": 18511
+      },
+      "Enron": {
+        "n": 29072,
+        "malicious": 13701
+      },
+      "Ling": {
+        "n": 2843,
+        "malicious": 451
+      },
+      "Nigerian_Fraud": {
+        "n": 3112,
+        "malicious": 3112
+      },
+      "SpamAssasin": {
+        "n": 5354,
+        "malicious": 1274
+      }
+    },
+    "email_random_split_baseline": {
+      "acc": 0.9894,
+      "f1": 0.9892,
+      "auc": 0.9994,
+      "legit_false_alarm": 0.0121
+    },
+    "email_leave_one_corpus_out": {
+      "CEAS_08": {
+        "malicious_recall": 0.9094,
+        "acc": 0.9196,
+        "auc": 0.9516,
+        "legit_false_alarm": 0.0691
+      },
+      "Enron": {
+        "malicious_recall": 0.8432,
+        "acc": 0.8762,
+        "auc": 0.9473,
+        "legit_false_alarm": 0.0944
+      },
+      "Ling": {
+        "malicious_recall": 0.8869,
+        "acc": 0.9451,
+        "auc": 0.9774,
+        "legit_false_alarm": 0.0439
+      },
+      "Nigerian_Fraud": {
+        "malicious_recall": 0.9923
+      },
+      "SpamAssasin": {
+        "malicious_recall": 0.9427,
+        "acc": 0.9393,
+        "auc": 0.9861,
+        "legit_false_alarm": 0.0618
+      }
+    },
+    "email_red_team_padding": {
+      "baseline": {
+        "legit_false_alarm": 0.0121,
+        "recall_clean": 0.9927,
+        "recall_padded": 0.158
+      },
+      "adversarially_trained": {
+        "legit_false_alarm": 0.0147,
+        "recall_clean": 0.9883,
+        "recall_padded": 0.7913
+      }
+    },
+    "email_random_split_final": {
+      "threshold": 0.4429,
+      "acc": 0.9843,
+      "f1": 0.984,
+      "auc": 0.9987,
+      "legit_false_alarm": 0.0183,
+      "malicious_recall": 0.987
+    }
+  },
+  "fileguard": {
+    "malware_rows": 138047,
+    "malware_share": 0.7007,
+    "malware_rows_with_duplicate_feature_vector": 35856,
+    "malware_group_split": {
+      "acc": 0.9956,
+      "auc": 0.99984,
+      "detection_rate": 0.9965,
+      "false_alarm": 0.0066,
+      "detection_at_0p1pct_false_alarm": 0.9892
+    },
+    "malware_top_gain_share": {
+      "ImageBase": 0.743,
+      "Subsystem": 0.11,
+      "VersionInformationSize": 0.031,
+      "MajorOperatingSystemVersion": 0.029,
+      "CheckSum": 0.01
+    },
+    "thirdparty_benign_files": 370,
+    "thirdparty_packages": 27,
+    "thirdparty_flagged_by_dataset_model": 0.1811,
+    "thirdparty_experiment_mean_of_5": {
+      "dataset_only": {
+        "detection_rate": 0.9965,
+        "dataset_false_alarm": 0.0066,
+        "unseen_thirdparty_false_alarm": 0.1494
+      },
+      "plus_thirdparty_benign": {
+        "detection_rate": 0.9967,
+        "dataset_false_alarm": 0.007,
+        "unseen_thirdparty_false_alarm": 0.0049
+      }
+    },
+    "malware_group_split_final": {
+      "threshold": 0.9568,
+      "acc": 0.9925,
+      "auc": 0.99985,
+      "detection_rate": 0.9897,
+      "false_alarm": 0.001,
+      "detection_at_0p1pct_false_alarm": 0.9897,
+      "thirdparty_false_alarm": 0.0
+    }
+  },
+  "demo_malicious_samples": 20
+}

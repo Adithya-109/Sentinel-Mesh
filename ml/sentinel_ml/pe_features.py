@@ -43,6 +43,15 @@ def version_info_size(pe):
 
 def extract(path):
     pe = pefile.PE(path)
+    try:
+        return _extract_fields(pe)
+    finally:
+        # pefile mmaps the file; without an explicit close the handle stays
+        # open and a caller can't delete/replace the file on Windows.
+        pe.close()
+
+
+def _extract_fields(pe):
     fh, oh = pe.FILE_HEADER, pe.OPTIONAL_HEADER
     r = {'Machine': fh.Machine, 'SizeOfOptionalHeader': fh.SizeOfOptionalHeader, 'Characteristics': fh.Characteristics}
     for f in ['MajorLinkerVersion', 'MinorLinkerVersion', 'SizeOfCode', 'SizeOfInitializedData', 'SizeOfUninitializedData',

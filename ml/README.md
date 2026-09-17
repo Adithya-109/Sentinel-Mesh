@@ -74,7 +74,7 @@ curl -X POST http://localhost:8001/score/email -H "Content-Type: application/jso
   -d '{"text": "URGENT: verify your account now"}'
 curl -X POST http://localhost:8001/score/file -F "file=@C:/Windows/System32/notepad.exe"
 curl -X POST http://localhost:8001/score/file -H "Content-Type: application/json" \
-  -d @demo/malicious_features_one.json   # {"features": {...54 PE features...}}
+  -d "{\"features\": $(python -c "import json;print(json.dumps(json.load(open('demo/malicious_features.json'))[0]))")}"
 ```
 
 ## 5. Phase 2: FieldGuard on-device model

@@ -12,8 +12,11 @@ _NUM_RE = re.compile(r"\d+")
 
 
 def normalize_text(text: str) -> str:
-    text = str(text)
-    text = _URL_RE.sub(" URLTOK ", text)
-    text = _EMAIL_RE.sub(" EMAILTOK ", text)
-    text = _NUM_RE.sub(" NUMTOK ", text)
+    # TfidfVectorizer skips its own lowercasing when given a custom
+    # preprocessor, so this has to do it -- otherwise "Free" and "free"
+    # become different tokens and the model fragments its vocabulary.
+    text = str(text).lower()
+    text = _URL_RE.sub(" urltok ", text)
+    text = _EMAIL_RE.sub(" emailtok ", text)
+    text = _NUM_RE.sub(" numtok ", text)
     return text
