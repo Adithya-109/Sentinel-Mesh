@@ -23,7 +23,8 @@ class Event(BaseModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
-def mail_event(is_malicious: bool, score: float, reasons: list[str], node: Optional[str] = None) -> Event:
+def mail_event(is_malicious: bool, score: float, reasons: list[str], node: Optional[str] = None,
+               details: Optional[dict] = None) -> Event:
     return Event(
         layer="mail",
         type="email_malicious" if is_malicious else "email_clean",
@@ -33,6 +34,7 @@ def mail_event(is_malicious: bool, score: float, reasons: list[str], node: Optio
         technique="T1566.001" if is_malicious else None,
         summary="Malicious email detected" if is_malicious else "Email looks clean",
         reasons=reasons,
+        details=details or {},
     )
 
 
@@ -48,4 +50,19 @@ def file_event(is_malicious: bool, score: float, reasons: list[str], node: Optio
         summary="Malicious file detected" if is_malicious else "File looks clean",
         reasons=reasons,
         details=details or {},
+    )
+
+
+def unsupported_attachment_event(filename: str, message_id: str, node: Optional[str] = None) -> Event:
+    """A file_clean-style Event for an attachment type we don't score (not PE)."""
+    return Event(
+        layer="file",
+        type="file_clean",
+        severity="info",
+        score=None,
+        node=node,
+        technique=None,
+        summary="attachment type not analysed",
+        reasons=[],
+        details={"message_id": message_id, "filename": filename, "unsupported": True},
     )
