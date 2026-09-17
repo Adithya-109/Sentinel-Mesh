@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+scratch_audit/
+
+# raw external inputs — large, not meant for git
+benign/pip_downloads/
+benign/npm_downloads/
+benign/extracted/
+benign/*.log
+data/security/
+data/traces/*.jsonl
+
+# trained model artifacts can be large; keep small ones (mailguard) but not big ones by default
+models/*.bin

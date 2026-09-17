@@ -1,0 +1,10 @@
+pandas
+scikit-learn
+lightgbm
+pefile
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+joblib
+matplotlib
