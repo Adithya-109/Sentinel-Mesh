@@ -117,9 +117,18 @@ upweighted (sample weight 20), cuts that to **0.44%**
   *behavior*. Worth stress-testing before trusting it against
   adversarially-built binaries.
 
-**Explanations.** Top-3 features by LightGBM `pred_contrib`, converted to
-plain English by `sentinel_ml/reasons.py` (all 54 feature names are
-mapped).
+**Explanations.** Exact SHAP values (LightGBM's `pred_contrib` is TreeSHAP;
+`tests/test_fileguard_shap.py` checks additivity and, where the `shap` library
+is installed, parity with it). The top-3 reasons are the features pushing
+hardest **toward the verdict** -- toward malicious for a malicious call, toward
+benign for a clean one -- converted to plain English by
+`sentinel_ml/reasons.py` (all 54 feature names are mapped). Before 2026-09-18
+the ranking was by absolute size, and 5 of the 20 demo malicious verdicts led
+with a reason pointing at *benign*. `/score/file` also returns the structured
+top-5 in `details.shap` (`base_value`, `margin`, `probability`, and per feature
+the value, its SHAP contribution and which way it pushes). Note the model
+leans heavily on `ImageBase` (see "Known limits"), so that reason is worded
+as a caution, not as evidence of behaviour.
 
 ## FieldGuard (phase 2, on-device)
 

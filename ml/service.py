@@ -75,8 +75,9 @@ def _score_pe_features(feats: dict, details: dict = None) -> Event:
     x_row = x.values.astype(float)
     score = float(_file["model"].predict_proba(pd.DataFrame([x_row], columns=cols))[:, 1][0])
     is_malicious = score >= _file["threshold"]
-    reasons = fileguard.explain(_file["model"], cols, x_row)
-    return file_event(is_malicious, score, reasons, details=details or {})
+    detail = fileguard.explain_detail(_file["model"], cols, x_row, malicious=is_malicious, top_k=5)
+    reasons = fileguard.explain(_file["model"], cols, x_row, malicious=is_malicious)
+    return file_event(is_malicious, score, reasons, details={**(details or {}), "shap": detail})
 
 
 @app.post("/score/email", response_model=Event)

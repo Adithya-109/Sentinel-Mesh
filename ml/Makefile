@@ -5,7 +5,7 @@ else
 PY ?= .venv/bin/python
 endif
 
-.PHONY: field-model test-field-model energygate test-energygate
+.PHONY: field-model test-field-model energygate test-energygate test-fileguard
 
 # Train the real on-device field model from data/traces/*.jsonl (Trace
 # rows per contracts/CONTRACT.md) and export it to export/field_model.h.
@@ -30,3 +30,8 @@ energygate:
 # tests/test_energygate_pipeline.py's docstring.
 test-energygate:
 	$(PY) tests/test_energygate_pipeline.py
+
+# FileGuard explanations: SHAP additivity, parity with the shap library (if
+# installed) and verdict-directed ranking. Uses the committed model + demo rows.
+test-fileguard:
+	$(PY) tests/test_fileguard_shap.py

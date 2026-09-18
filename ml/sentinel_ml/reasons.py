@@ -20,7 +20,7 @@ FILE_FEATURE_DESCRIPTIONS = {
     "AddressOfEntryPoint": "entry point address",
     "BaseOfCode": "base address of the code section",
     "BaseOfData": "base address of the data section",
-    "ImageBase": "preferred load address (packers/malware often pick unusual values)",
+    "ImageBase": "preferred load address (the model leans on this heavily; it may reflect how the training files were built, not behaviour)",
     "SectionAlignment": "section alignment in memory",
     "FileAlignment": "section alignment on disk",
     "MajorOperatingSystemVersion": "minimum OS version required (major)",
@@ -110,8 +110,16 @@ def humanize_mail_reason(token: str, contrib: float) -> str:
     return f"the word '{token}' {strength} suggests {direction}"
 
 
+_HEX_FEATURES = {"ImageBase", "DllCharacteristics", "Characteristics", "Machine"}
+
+
+def _fmt_file_value(feature: str, value: float) -> str:
+    # address-like fields are read in hex (0x400000), not 4.1943e+06
+    return hex(int(value)) if feature in _HEX_FEATURES else f"{value:g}"
+
+
 def humanize_file_reason(feature: str, value: float, contrib: float) -> str:
     direction = "malicious" if contrib > 0 else "benign"
     strength = "strongly" if abs(contrib) > 2 else "moderately" if abs(contrib) > 0.5 else "slightly"
     phrase = FILE_FEATURE_DESCRIPTIONS.get(feature, feature)
-    return f"{phrase} ({feature}={value:g}) -- {strength} suggests {direction}"
+    return f"{phrase} ({feature}={_fmt_file_value(feature, value)}) -- {strength} suggests {direction}"

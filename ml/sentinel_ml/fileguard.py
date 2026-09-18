@@ -76,12 +76,53 @@ def package_holdout_experiment(X_train, y_train, X_test, y_test, B, pkg, cols, n
     return pd.DataFrame(rows).groupby("model").mean().round(4).to_dict("index")
 
 
-def explain(model, cols, x_row, top_k=3):
-    """Top-k feature contributions for one row, via LightGBM pred_contrib."""
-    contrib = model.booster_.predict(x_row.reshape(1, -1), pred_contrib=True)[0]
-    contrib = contrib[:-1]  # drop the bias/expected-value term
-    order = np.argsort(-np.abs(contrib))[:top_k]
-    return [humanize_file_reason(cols[i], x_row[i], float(contrib[i])) for i in order]
+MIN_REASON_SHAP = 0.05  # log-odds; below this a feature is noise, not a reason
+
+
+def shap_values(model, x_row):
+    """Exact TreeSHAP values for one row, in log-odds, plus the expected value.
+
+    LightGBM's `pred_contrib` runs the same TreeSHAP algorithm as
+    `shap.TreeExplainer`, without the numba dependency (parity is tested in
+    tests/test_fileguard_shap.py). The values sum, with the base value, to the
+    raw margin: sigmoid(base + sum(phi)) is the model's probability.
+    """
+    contrib = model.booster_.predict(np.asarray(x_row, dtype=float).reshape(1, -1), pred_contrib=True)[0]
+    return contrib[:-1], float(contrib[-1])
+
+
+def _rank(phi, malicious, top_k):
+    """Indices of the features that drove the call, strongest first.
+
+    For a malicious verdict that means the features pushing hardest toward
+    malicious; for a clean one, toward benign. Ranking by absolute size (the old
+    behaviour) let a benign-pointing feature lead a malicious verdict's reasons.
+    """
+    if malicious is None:
+        return list(np.argsort(-np.abs(phi))[:top_k])
+    sign = 1.0 if malicious else -1.0
+    order = [int(i) for i in np.argsort(-sign * phi) if sign * phi[i] >= MIN_REASON_SHAP][:top_k]
+    return order or list(np.argsort(-np.abs(phi))[:top_k])
+
+
+def explain_detail(model, cols, x_row, malicious=None, top_k=3):
+    """Structured explanation: the base value, the margin, and the top-k SHAP contributions."""
+    x_row = np.asarray(x_row, dtype=float)
+    phi, base = shap_values(model, x_row)
+    margin = base + float(phi.sum())
+    top = [
+        {"feature": cols[i], "value": float(x_row[i]), "shap": round(float(phi[i]), 4),
+         "pushes": "malicious" if phi[i] > 0 else "benign"}
+        for i in _rank(phi, malicious, top_k)
+    ]
+    return {"base_value": round(base, 4), "margin": round(margin, 4),
+            "probability": round(float(1.0 / (1.0 + np.exp(-margin))), 6), "top": top}
+
+
+def explain(model, cols, x_row, top_k=3, malicious=None):
+    """Plain-English top-k reasons. Pass `malicious` (the verdict) to explain that verdict."""
+    detail = explain_detail(model, cols, x_row, malicious=malicious, top_k=top_k)
+    return [humanize_file_reason(t["feature"], t["value"], t["shap"]) for t in detail["top"]]
 
 
 def train(security_root: str, thirdparty_features_csv: str = None, max_false_alarm: float = 0.001, seed: int = SEED):
