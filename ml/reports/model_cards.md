@@ -167,3 +167,71 @@ decision tree on recorded `Trace` rows and exports it to C
 (train -> C export -> gcc compile -> parity check) is verified against
 synthetic data in `ml/tests/` -- **that synthetic accuracy is not a real
 result** and is never written to this file or to `reports/metrics.json`.
+
+## EnergyGate (phase 3, on-device) -- SIMULATED, not a result
+
+**What it is.** A small decision tree (depth 5, 15 leaves) over 8 cheap signals
+(`hs_per_s, hs_fail, rssi_mean, rssi_var, loss_pct, dup_pct, frag_complete_pct,
+battery_pct`) that outputs the probability a sender is real, exported to C and
+compiled into field-1's firmware. The spend/challenge/drop policy, joule budget
+and cookie live in firmware (`gate_policy.h`), not here.
+
+**Data: simulated.** No real traces exist yet (`console/data/traces/` is empty),
+so this was trained on `tests/generate_synthetic_traces.py --hard`: 30 sessions,
+3,600 windows, 63% "real". Hard mode makes the classes overlap (attack windows
+are interpolated toward normal by Beta(2, 1.2), so many are only weakly
+abnormal), adds multiplicative measurement noise and 3% label noise (the
+console's `LABEL` is set by a human, so windows straddling a switch are
+mislabelled). Those settings were fixed in advance, not tuned to a result. It
+is still our own assumptions about attacks, so **nothing below is a measured
+result**. The header carries a SIMULATED banner and every JSON/chart it writes
+is flagged SIMULATED.
+
+**Held-out evaluation (leave-one-session-out, on simulated data).**
+
+| depth | AUC | log loss | Brier | calibration error (ECE) | accuracy @0.5 |
+|---|---|---|---|---|---|
+| 3 | 0.934 | 0.180 | 0.044 | 0.006 | 95.1% |
+| 4 | 0.941 | 0.175 | 0.042 | 0.008 | 95.0% |
+| **5 (shipped)** | 0.947 | 0.171 | 0.040 | 0.010 | 95.5% |
+
+Depth was chosen by held-out log loss, capped at 5 to keep the on-device claim
+(loss was still falling at 5). Scores are graded, not binary (leaf
+probabilities range 0.00-1.00 with several mid values) and well calibrated on
+simulated data. That calibration is a property of the generator, not evidence
+it holds on real traffic.
+
+**Operating-point sweep** (`reports/energygate_synthetic_sweep.json`,
+`reports/charts/energygate_sweep_SIMULATED.png`). With the firmware's default
+thresholds (spend >= 0.7, challenge >= 0.4), on held-out simulated windows:
+98.7% of legitimate senders connect (1.7% delayed by a challenge) and the
+attacker makes the node spend 7.7% of the energy it would undefended; 2.1% of
+windows fall in the challenge band. It assumes a cookie challenge costs 5% of a
+handshake (ASSUMED, not measured), that legitimate senders pass it and attackers
+do not, and it is per-window, not a time simulation. It shows the *shape* of the
+trade-off the mechanism offers.
+
+**What it uses.** `hs_fail` (56% of importance) and `dup_pct` (39%) do almost
+all the work; `loss_pct`, `hs_per_s`, `rssi_mean` carry a little; `battery_pct`,
+`rssi_var` and `frag_complete_pct` are unused. `battery_pct` being unused is the
+sanity check that mattered: it is a per-session constant in the generator, and
+with few sessions a tree can latch onto it as a stand-in for session identity.
+
+**Verified.** The C export matches sklearn to 2e-7 on 500 boundary-stressing
+rows (gcc parity check). Compiled with the ESP32 (Xtensa) toolchain the scoring
+code is 423 bytes of flash and no static RAM (the rule-based stand-in is 307).
+Inference *energy* is not estimated here; the INA219 rig has to measure it.
+Firmware native tests pass with the model compiled in (288/288) and without it
+(290/290).
+
+**Known limits.**
+- **Vantage-point caveat.** Training windows are recorded at the gateway, but the
+  model scores at field-1 (see `contracts/CHANGELOG.md`). Irrelevant for
+  simulated data, worth watching once real traces exist.
+- **"Time since this sender's last attempt"** (a brief signal) has no Trace field;
+  `hs_per_s` stands in for it and is not equivalent.
+- **Weak signal plus failures is ambiguous by design.** A very weak link with many
+  failed handshakes scores ~0.35 (undecided): a real weak link and an attacker
+  look alike there, and that is what the challenge band is for.
+- The hard-mode overlap is our guess at how messy real data is. Real recordings
+  may be easier or much harder; only they can say.
