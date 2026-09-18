@@ -31,24 +31,24 @@ malware, never anything executed:
 
 ```
 cd benign
-python -m pip download --dest pip_downloads --platform win_amd64 \
-  --python-version 312 --implementation cp --abi cp312 --only-binary=:all: --no-deps \
-  numpy scipy pillow lxml pywin32 pyzmq cryptography grpcio protobuf psutil \
-  pandas pyarrow scikit-learn regex ujson orjson pydantic-core tokenizers watchdog cffi
-# unzip each .whl into extracted/pip_<pkg>/ (see build_benign_features.py's docstring for the loop)
+bash fetch_pip_wheels.sh      # pip download --only-binary=:all: win_amd64 AND win32
+                               # for pkg_list_pip.txt (~107 packages), one at a time
+                               # so a missing win32 wheel doesn't abort the batch
+bash extract_new_wheels.sh    # unzip into extracted/, platform-tagged so
+                               # same-named win_amd64/win32 packages don't collide
 
-npm pack @esbuild/win32-x64 lightningcss-win32-x64-msvc @rollup/rollup-win32-x64-msvc \
-  @swc/core-win32-x64-msvc @img/sharp-win32-x64 @img/sharp-libvips-win32-x64 \
-  @next/swc-win32-x64-msvc esbuild-windows-64 --pack-destination npm_downloads
+# a handful more npm Windows-native packages (see git history for the exact list)
+npm pack @esbuild/win32-x64 @esbuild/win32-ia32 lightningcss-win32-x64-msvc ... \
+  --pack-destination npm_downloads
 # untar each .tgz into extracted/npm_<pkg>/
 
 python build_benign_features.py   # -> features/thirdparty_features.csv
 ```
 
-This produced 370 native `.pyd/.dll/.exe/.node` files across 27 packages —
-in line with the brief's 369-file/27-package set. Replace with real
-Program Files binaries when the team collects them; `build_all.py` picks
-up whatever is in `benign/features/thirdparty_features.csv`.
+This produced 1,566 native `.pyd/.dll/.exe/.node` files across 198
+packages. Replace with real Program Files binaries when the team collects
+them; `build_all.py` picks up whatever is in
+`benign/features/thirdparty_features.csv`.
 
 ## 3. Train MailGuard + FileGuard, write reports/metrics.json
 
@@ -75,7 +75,14 @@ curl -X POST http://localhost:8001/score/email -H "Content-Type: application/jso
 curl -X POST http://localhost:8001/score/file -F "file=@C:/Windows/System32/notepad.exe"
 curl -X POST http://localhost:8001/score/file -H "Content-Type: application/json" \
   -d "{\"features\": $(python -c "import json;print(json.dumps(json.load(open('demo/malicious_features.json'))[0]))")}"
+curl -X POST http://localhost:8001/score/eml -F "file=@some_message.eml"
 ```
+
+`/score/eml` (multipart `.eml`) parses headers and an HTML-or-plain body,
+scores the body with MailGuard, scores `.exe`/`.dll` attachments with
+FileGuard, and returns `file_clean`-style Events with
+`details.unsupported=true` for anything else — a list of Events sharing
+one `details.message_id` so the console can group them into an incident.
 
 ## 5. Run the live-demo script
 
@@ -93,26 +100,44 @@ if one is listening. See `demo/README.md`.
 ## 6. Phase 2: FieldGuard on-device model
 
 Waits on `data/traces/*.jsonl` (one file per recording session, each line
-a `Trace` row per the contract). Once present:
+a `Trace` row per the contract). Once present, one command:
 
-```python
-from sentinel_ml import field_model
-clf, metrics = field_model.train("data/traces")
-field_model.export_c(clf, "export/field_model.h")
+```
+make field-model
 ```
 
-`export/field_model.h` exposes `int classify_window(const float* f)` with
-no runtime dependency, for the ESP32 build.
+trains the decision tree and writes `export/field_model.h`, exposing
+`int classify_window(const float* f)` with no runtime dependency, for the
+ESP32 build. `make test-field-model` proves the same pipeline (train ->
+C export -> `gcc` compile -> 500-row parity check) against synthetic
+`SYNTH_`-labelled data in `ml/tests/` -- never a real result, see that
+folder's docstrings.
+
+## Model cards + explanations
+
+`reports/model_cards.md`: each model's data, honest metrics and known
+limits (the 64-bit blind spot, 2000-2008 email dates, a re-implemented
+feature extractor, and more). `sentinel_ml/reasons.py`: the word/feature
+-> plain-English map behind every `Event.reasons` entry.
+
+## Optional: DistilBERT vs. TF-IDF
+
+`notebooks/transformer_mailguard.ipynb` -- brief section 5's "strengthen
+at the event" transformer experiment, meant for a free Colab/Kaggle GPU
+(not run in this repo). See `notebooks/README.md`.
 
 ## Layout
 
 ```
-sentinel_ml/       data.py, text.py, mailguard.py, fileguard.py, field_model.py,
-                    schemas.py (Event), pe_features.py
-service.py          FastAPI: /health, /score/email, /score/file
+sentinel_ml/       data.py, text.py, eml.py, mailguard.py, fileguard.py,
+                    field_model.py, reasons.py, schemas.py (Event), pe_features.py
+service.py          FastAPI: /health, /score/email, /score/file, /score/eml
 build_all.py         trains MailGuard + FileGuard, writes reports/metrics.json
+train_field_model.py the real field-model entrypoint (`make field-model`)
 benign/              third-party benign binaries + build_benign_features.py
-demo/                held-out malicious_features.json for the live demo
-reports/             metrics.json + charts/*.png (make_charts.py)
-export/              field_model.h (phase 2, C export)
+demo/                held-out fixtures + run_demo.py for the live demo
+reports/             metrics.json, model_cards.md, charts/*.png (make_charts.py)
+export/              field_model.h (phase 2, C export, real traces only)
+tests/               synthetic field-model pipeline test (never a real result)
+notebooks/           transformer_mailguard.ipynb (optional, GPU-only)
 ```
