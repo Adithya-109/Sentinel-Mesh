@@ -157,7 +157,7 @@ DRAIN = [
 
     (3, {
         "layer": "field", "type": "gate_decision", "severity": "low", "score": 0.21,
-        "node": "gateway", "technique": None,
+        "node": "field-1", "technique": None,
         "summary": "EnergyGate: CHALLENGE sent to unknown sender",
         "reasons": ["no completed handshake before", "3 attempts in 4 s"],
         "details": {"action": "challenge", "sender": "unknown-7f", "budget_j": 38.9, "budget_max_j": 40.0},
@@ -165,7 +165,7 @@ DRAIN = [
 
     (4, {
         "layer": "field", "type": "gate_decision", "severity": "medium", "score": 0.06,
-        "node": "gateway", "technique": None,
+        "node": "field-1", "technique": None,
         "summary": "EnergyGate: DROP (cookie never returned)",
         "reasons": ["cookie not echoed", "fragments never complete (12% complete)",
                     "no completed handshake before"],
@@ -174,11 +174,11 @@ DRAIN = [
 
     (5, {
         "layer": "field", "type": "gate_decision", "severity": "info", "score": 0.93,
-        "node": "gateway", "technique": None,
-        "summary": "EnergyGate: SPEND on field-1",
-        "reasons": ["known sender field-1", "fragments 100% complete", "RSSI steady (-51 dBm)"],
-        "details": {"action": "spend", "sender": "field-1", "budget_j": 36.8, "budget_max_j": 40.0},
-    }, "BEAT 4c -- the real sensor still gets through: the handshake is paid for, once"),
+        "node": "field-1", "technique": None,
+        "summary": "EnergyGate: SPEND for the genuine gateway",
+        "reasons": ["known sender gateway", "fragments 100% complete", "RSSI steady (-51 dBm)"],
+        "details": {"action": "spend", "sender": "gateway", "budget_j": 36.8, "budget_max_j": 40.0},
+    }, "BEAT 4c -- the genuine gateway still gets through: its handshake is paid for, once"),
 
     (8, ("control", "/attack", {"profile": "none"}), "attack stops"),
 ]

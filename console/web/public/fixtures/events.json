@@ -38,7 +38,7 @@
   "details": {
    "message_id": "m-77",
    "filename": "invoice_2026.exe",
-   "sha256": "a3f1\u2026"
+   "sha256": "a3f1…"
   }
  },
  {
@@ -85,7 +85,7 @@
   "type": "gate_decision",
   "severity": "low",
   "score": 0.21,
-  "node": "gateway",
+  "node": "field-1",
   "technique": null,
   "summary": "EnergyGate: CHALLENGE sent to unknown sender",
   "reasons": [
@@ -104,7 +104,7 @@
   "type": "gate_decision",
   "severity": "medium",
   "score": 0.06,
-  "node": "gateway",
+  "node": "field-1",
   "technique": null,
   "summary": "EnergyGate: DROP (cookie never returned)",
   "reasons": [
@@ -144,9 +144,9 @@
   "score": null,
   "node": "field-1",
   "technique": null,
-  "summary": "Battery draw 6.1\u00d7 baseline",
+  "summary": "Battery draw 6.1× baseline",
   "reasons": [
-   "handshake requests 40\u00d7 normal rate"
+   "handshake requests 40× normal rate"
   ],
   "details": {
    "draw_mw": 512.0,
@@ -181,7 +181,7 @@
   "technique": null,
   "summary": "Enclosure opened: session keys wiped",
   "reasons": [
-   "light level jumped 12 \u2192 640",
+   "light level jumped 12 → 640",
    "movement detected 0.4 s later"
   ],
   "details": {}

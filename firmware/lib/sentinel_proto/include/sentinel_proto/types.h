@@ -23,6 +23,11 @@ enum class MsgType : uint8_t {
     DATA     = 0x04,
     ACK      = 0x05,
     REKEY    = 0x06,
+    // v4 EnergyGate (gate_msgs.h). EnergyGate runs on field-1, which has no
+    // serial link during a run, so its decisions and its DEFENSE setting
+    // travel over the mesh via the gateway.
+    GATE_REPORT = 0x07, // field-1 -> gateway: one admission decision
+    CONTROL     = 0x08, // gateway -> field-1: relays the console's DEFENSE <mode>
 };
 
 inline bool is_valid_msg_type(uint8_t v) {
@@ -33,6 +38,8 @@ inline bool is_valid_msg_type(uint8_t v) {
         case static_cast<uint8_t>(MsgType::DATA):
         case static_cast<uint8_t>(MsgType::ACK):
         case static_cast<uint8_t>(MsgType::REKEY):
+        case static_cast<uint8_t>(MsgType::GATE_REPORT):
+        case static_cast<uint8_t>(MsgType::CONTROL):
             return true;
         default:
             return false;

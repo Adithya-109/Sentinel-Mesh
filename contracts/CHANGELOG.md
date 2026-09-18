@@ -5,6 +5,58 @@ streams.** Entries are newest first.
 
 ---
 
+## 2026-09-18 — EnergyGate moves from the gateway to field-1
+
+**Firmware (Claude 3) and ML (Claude 1): read this.** No serial line format,
+event type or schema changes -- this is about *which board* runs EnergyGate,
+and one feature-order fix.
+
+**Why.** Brief v4 puts EnergyGate on the battery-powered node being drained:
+"flatten a *field node's* battery" (section 1), "the node has to decide who is
+worth spending energy on" ("What changed"), "the node holds an energy budget",
+"the node replies with an 8-byte value" (section 4), and the INA219 sits on
+"the field node's battery line" (sections 3, 10). `docs/v4_energy_split.md`
+had put it on the gateway, and the firmware followed that. But the gateway is
+USB-powered (`docs/hardware_setup.md`), so the flood drained a board with no
+battery while the INA219 measured a battery nobody was attacking -- demo beats
+3-4 ("the battery line tilts down ... EnergyGate on, draw falls back to idle")
+could not happen on real hardware.
+
+**What changed.**
+- field-1 now answers inbound `HELLO`s and runs the whole admission path:
+  `energygate_score()`, the joule token bucket, the cookie, and the
+  spend/challenge/drop policy (now `lib/sentinel_proto/gate_policy.h`,
+  host-tested, including the `none|ratelimit|cookie|gate` modes the five-row
+  experiment needs). Its `battery_pct` feature is now its own real ADC
+  reading; on the gateway it was never set and silently defaulted to 100%.
+- The gateway relays the console's `DEFENSE <x>` to field-1 (new mesh message
+  `CONTROL`), and turns field-1's `GATE_REPORT` messages into the
+  `gate_decision` / `budget_exhausted` events the console already expects --
+  now with `"node": "field-1"`. The gateway keeps the signed-handshake check,
+  the replay window, trace windows and lockout (beat 5 is still the gateway's).
+- The attacker's `FLOOD` / `SLOW_DRIP` target field-1; the gateway still
+  overhears them for its trace windows and FieldGuard.
+- The monitor board now also prints ~1 Hz `NRG` lines -- it previously printed
+  only per-operation CSV, so the console's battery chart had no real data.
+
+**Feature-order fix (ML <-> firmware).** The firmware stand-in read
+`f[] = hs_per_s, hs_fail, frag_complete_pct, loss_pct, dup_pct, rssi_mean,
+rssi_var, battery_pct`, but `ml/sentinel_ml/energygate.py`'s `FEATURE_ORDER`
+(what the real model is trained on) is `hs_per_s, hs_fail, rssi_mean,
+rssi_var, loss_pct, dup_pct, frag_complete_pct, battery_pct`. Dropping the real
+model in would have scored signal strength as fragment completion. The
+firmware now uses the ML order, and `energygate.cpp` compiles the real model
+automatically when `ml/export/energygate.h` is copied to
+`firmware/lib/sentinel_proto/include/sentinel_proto/energygate_model.h` --
+verified by compiling an exported model against the firmware library.
+
+**Known caveat.** EnergyGate's training windows are recorded at the gateway;
+it now runs at field-1, whose view of RSSI differs from the gateway's. The
+feature definitions match; the vantage point does not. Record field-1-side
+windows when the transport exists if the scores look off.
+
+---
+
 ## 2026-09-18 — v4 endpoints, control serial lines, NRG line, board timestamps
 
 Closes the "still open" item below: the six endpoints the frontend kit assumed

@@ -1,38 +1,29 @@
 #pragma once
-// Rule-based stand-in for EnergyGate's admission-scoring model (brief v4 /
-// docs/v4_energy_split.md: Claude 1 owns `sentinel_ml/energygate.py`,
-// exporting `float energygate_score(const float* f)` the same way
-// `field_model.py` exports `classify_window()` -- train offline, export to
-// C, host-gcc parity test). This header is the placeholder that lets the
-// gateway's EnergyGate call site exist and be tested *before* that lands,
-// with the exact same signature so swapping the body over is a drop-in
-// once `ml/export/energygate.h` exists (see field_model.h for the
-// established pattern this mirrors).
+// EnergyGate's scoring function: the probability, in [0,1], that the sender
+// of an inbound HELLO is a legitimate node. Runs on field-1, before any
+// signature or KEM work (brief v4 section 4). The spend/challenge/drop
+// decision that consumes this score is gate_policy.h, not here.
 //
-// Output is a probability the sender is a legitimate node, in [0,1] --
-// NOT a class. The gateway's own policy (spend/challenge/drop, compare
-// against EnergyBudget) consumes this score; it does not live here, per
-// docs/v4_energy_split.md's explicit split ("the policy itself ... is
-// firmware's job").
+// Two implementations behind one signature:
+//   * the trained model -- Claude 1's `ml/sentinel_ml/energygate.py` exports a
+//     decision tree to `ml/export/energygate.h`. Copy that file to
+//     `include/sentinel_proto/energygate_model.h` and energygate.cpp compiles
+//     it in automatically (energygate_uses_trained_model() then returns true).
+//   * otherwise, a rule-based stand-in with the same inputs and output range,
+//     so the call site exists and is tested before the model does.
 //
-// Feature order (8 floats) -- the free signals doc lists (rssi_mean,
-// rssi_var, hs_fail/hs_per_s as a completion-rate proxy,
-// frag_complete_pct, loss_pct/dup_pct, battery_pct); this is this stand-
-// in's concrete choice among those, kept intentionally close to
-// TraceWindowCounters (trace.h) plus the v4 Trace fields so the gateway
-// can build the feature vector directly off state it already tracks per
-// window. Claude 1's real model may pick a different order/subset --
-// whichever it settles on becomes the new contract for this function once
-// ml/export/energygate.h exists; update this comment and the gateway call
-// site together at that point.
-//   f[0] = hs_per_s            (handshake attempts/s this window)
-//   f[1] = hs_fail              (failed handshakes this window)
-//   f[2] = frag_complete_pct     (% of this sender's fragment sets that completed)
-//   f[3] = loss_pct               (packet loss % on the link)
-//   f[4] = dup_pct                  (duplicate-packet rate)
-//   f[5] = rssi_mean                 (dBm)
-//   f[6] = rssi_var                   (dBm^2)
-//   f[7] = battery_pct                 (field node's own battery %, 0-100)
+// Feature order (8 floats) -- MUST match `FEATURE_ORDER` in
+// ml/sentinel_ml/energygate.py, because that is the order the trained model
+// was fitted on. (An earlier stand-in used its own order; dropping the real
+// model in would have read rssi_mean as frag_complete_pct, silently.)
+//   f[0] = hs_per_s            handshake attempts per second this window
+//   f[1] = hs_fail             failed handshakes this window
+//   f[2] = rssi_mean           dBm
+//   f[3] = rssi_var            dBm^2
+//   f[4] = loss_pct            packet loss %, 0-100
+//   f[5] = dup_pct             duplicate-packet rate %, 0-100
+//   f[6] = frag_complete_pct   % of fragment sets that completed, 0-100
+//   f[7] = battery_pct         field-1's own battery %, 0-100
 //
 // No Arduino.h dependency -- host-testable like the rest of sentinel_proto.
 
@@ -42,10 +33,22 @@ namespace sentinel {
 
 constexpr int ENERGYGATE_NUM_FEATURES = 8;
 
-// Rule-based placeholder. Deliberately conservative (biased toward a
-// mid-range score rather than confidently vouching for a sender) until
-// real recorded traces let Claude 1 replace this with a trained model --
-// same reasoning as field_model.cpp's classify_window() stand-in.
+// Indices into the feature vector, in FEATURE_ORDER.
+enum EnergyGateFeature : int {
+    EG_HS_PER_S = 0,
+    EG_HS_FAIL = 1,
+    EG_RSSI_MEAN = 2,
+    EG_RSSI_VAR = 3,
+    EG_LOSS_PCT = 4,
+    EG_DUP_PCT = 5,
+    EG_FRAG_COMPLETE_PCT = 6,
+    EG_BATTERY_PCT = 7,
+};
+
 float energygate_score(const float* f);
+
+// True when the trained model (energygate_model.h) is compiled in; false for
+// the rule-based stand-in. Logged at boot so nobody mistakes one for the other.
+bool energygate_uses_trained_model();
 
 } // namespace sentinel

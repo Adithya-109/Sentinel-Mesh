@@ -44,7 +44,7 @@ export function StatusBar({ s }: { s: Status | null }) {
         <div className="k">EnergyGate budget</div>
         <div className="v">{fmtNum(s.budget_j, 1, s.budget_max_j ? `/ ${s.budget_max_j} J` : "J")}</div>
         {budgetPct !== null ? <div className="budget"><div style={{ width: `${budgetPct}%` }} /></div>
-          : <div className="m">reported by the gateway once EnergyGate runs</div>}
+          : <div className="m">reported by field-1 (via the gateway) once EnergyGate runs</div>}
       </div></TiltCard>
       <TiltCard maxTilt={3} glare={false}><div className="stat">
         <div className="k">Defence / attack</div>

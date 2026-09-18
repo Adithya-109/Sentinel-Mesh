@@ -23,6 +23,8 @@
 #include "sentinel_proto/cookie.h"
 #include "sentinel_proto/energy_budget.h"
 #include "sentinel_proto/energygate.h"
+#include "sentinel_proto/gate_policy.h"
+#include "sentinel_proto/gate_msgs.h"
 
 using namespace sentinel;
 
@@ -504,26 +506,239 @@ static void test_energy_budget_credit_clamped_and_floored() {
 // rssi_mean, rssi_var, battery_pct.
 
 static void test_energygate_healthy_sender_scores_high() {
-    float f[ENERGYGATE_NUM_FEATURES] = {0.2f, 0, 100.0f, 0.0f, 0.0f, -55.0f, 2.0f, 80.0f};
+    float f[ENERGYGATE_NUM_FEATURES] = {0.2f, 0, -55.0f, 2.0f, 0.0f, 0.0f, 100.0f, 80.0f};
     float s = energygate_score(f);
     CHECK(s > 0.8f);
     CHECK(s <= 1.0f);
 }
 
 static void test_energygate_flooding_sender_scores_low() {
-    float f[ENERGYGATE_NUM_FEATURES] = {20.0f, 18.0f, 10.0f, 40.0f, 30.0f, -70.0f, 30.0f, 50.0f};
+    float f[ENERGYGATE_NUM_FEATURES] = {20.0f, 18.0f, -70.0f, 30.0f, 40.0f, 30.0f, 10.0f, 50.0f};
     float s = energygate_score(f);
     CHECK(s < 0.3f);
     CHECK(s >= 0.0f);
 }
 
 static void test_energygate_score_bounded() {
-    float f_lo[ENERGYGATE_NUM_FEATURES] = {1000.0f, 1000.0f, 0.0f, 100.0f, 100.0f, -100.0f, 500.0f, 0.0f};
-    float f_hi[ENERGYGATE_NUM_FEATURES] = {0.0f, 0.0f, 100.0f, 0.0f, 0.0f, -30.0f, 0.0f, 100.0f};
+    float f_lo[ENERGYGATE_NUM_FEATURES] = {1000.0f, 1000.0f, -100.0f, 500.0f, 100.0f, 100.0f, 0.0f, 0.0f};
+    float f_hi[ENERGYGATE_NUM_FEATURES] = {0.0f, 0.0f, -30.0f, 0.0f, 0.0f, 0.0f, 100.0f, 100.0f};
     CHECK(energygate_score(f_lo) >= 0.0f);
     CHECK(energygate_score(f_lo) <= 1.0f);
     CHECK(energygate_score(f_hi) >= 0.0f);
     CHECK(energygate_score(f_hi) <= 1.0f);
+}
+
+// Pins the feature ORDER to ml/sentinel_ml/energygate.py's FEATURE_ORDER, so
+// a future reshuffle can't silently feed one signal into another's slot.
+static void test_energygate_feature_order_matches_ml() {
+    CHECK(EG_HS_PER_S == 0);
+    CHECK(EG_HS_FAIL == 1);
+    CHECK(EG_RSSI_MEAN == 2);
+    CHECK(EG_RSSI_VAR == 3);
+    CHECK(EG_LOSS_PCT == 4);
+    CHECK(EG_DUP_PCT == 5);
+    CHECK(EG_FRAG_COMPLETE_PCT == 6);
+    CHECK(EG_BATTERY_PCT == 7);
+}
+static void test_energygate_reads_frag_complete_from_slot_6() {
+    float good[ENERGYGATE_NUM_FEATURES] = {0.2f, 0, -55.0f, 2.0f, 0.0f, 0.0f, 100.0f, 80.0f};
+    float bad[ENERGYGATE_NUM_FEATURES]  = {0.2f, 0, -55.0f, 2.0f, 0.0f, 0.0f, 0.0f, 80.0f};
+    CHECK(energygate_score(bad) < energygate_score(good));
+}
+static void test_energygate_reads_rssi_var_from_slot_3() {
+    float calm[ENERGYGATE_NUM_FEATURES]    = {0.2f, 0, -55.0f, 2.0f, 0.0f, 0.0f, 100.0f, 80.0f};
+    float erratic[ENERGYGATE_NUM_FEATURES] = {0.2f, 0, -55.0f, 40.0f, 0.0f, 0.0f, 100.0f, 80.0f};
+    CHECK(energygate_score(erratic) < energygate_score(calm));
+}
+
+// ---------------------------------------------------------------------
+// gate_policy: the admission decision, per DEFENSE mode (brief v4 s.6)
+// ---------------------------------------------------------------------
+
+static GateInputs gate_in(float p, bool cookie = false, uint32_t since = NEVER_SEEN) {
+    GateInputs in;
+    in.prob_real = p;
+    in.cookie_echoed = cookie;
+    in.ms_since_last_attempt = since;
+    return in;
+}
+
+static void test_gate_none_always_spends_and_never_touches_budget() {
+    EnergyBudget b(1.0f, 0.0f, 0.0f); // empty bucket
+    GatePolicyConfig cfg;
+    CHECK(decide_admission(DefenseMode::NONE, gate_in(0.0f), b, cfg, 1000) == GateAction::SPEND);
+    CHECK(b.balance_j() == 0.0f);
+}
+static void test_gate_ratelimit_drops_a_flood_passes_a_slow_drip() {
+    EnergyBudget b(10.0f, 0.0f);
+    GatePolicyConfig cfg; // 10 s per sender
+    CHECK(decide_admission(DefenseMode::RATELIMIT, gate_in(0.0f, false, NEVER_SEEN), b, cfg, 0) == GateAction::SPEND);
+    CHECK(decide_admission(DefenseMode::RATELIMIT, gate_in(0.0f, false, 50), b, cfg, 50) == GateAction::DROP);        // flood
+    CHECK(decide_admission(DefenseMode::RATELIMIT, gate_in(0.0f, false, 60000), b, cfg, 60000) == GateAction::SPEND); // ~1/min drip gets through
+    CHECK(b.balance_j() == 10.0f);
+}
+static void test_gate_cookie_challenges_until_echoed() {
+    EnergyBudget b(10.0f, 0.0f);
+    GatePolicyConfig cfg;
+    CHECK(decide_admission(DefenseMode::COOKIE, gate_in(0.0f, false), b, cfg, 0) == GateAction::CHALLENGE);
+    CHECK(decide_admission(DefenseMode::COOKIE, gate_in(0.0f, true), b, cfg, 0) == GateAction::SPEND);
+    CHECK(b.balance_j() == 10.0f);
+}
+static void test_gate_spends_on_a_confident_score_and_charges_the_budget() {
+    EnergyBudget b(1.0f, 0.0f);
+    GatePolicyConfig cfg;
+    cfg.handshake_cost_j = 0.25f;
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.9f), b, cfg, 0) == GateAction::SPEND);
+    CHECK(b.balance_j() > 0.74f && b.balance_j() < 0.76f);
+}
+static void test_gate_challenges_a_middling_score_without_charging() {
+    EnergyBudget b(1.0f, 0.0f);
+    GatePolicyConfig cfg;
+    cfg.handshake_cost_j = 0.25f;
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.5f), b, cfg, 0) == GateAction::CHALLENGE);
+    CHECK(b.balance_j() == 1.0f);
+}
+static void test_gate_drops_a_low_score() {
+    EnergyBudget b(1.0f, 0.0f);
+    GatePolicyConfig cfg;
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.1f), b, cfg, 0) == GateAction::DROP);
+}
+static void test_gate_admits_a_returned_cookie_on_recheck() {
+    EnergyBudget b(1.0f, 0.0f);
+    GatePolicyConfig cfg;
+    cfg.handshake_cost_j = 0.25f;
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.5f, true), b, cfg, 0) == GateAction::SPEND);
+    CHECK(b.balance_j() < 1.0f);
+    // a returned cookie does not rescue a sender the model distrusts
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.1f, true), b, cfg, 0) == GateAction::DROP);
+}
+static void test_gate_drops_when_the_budget_cannot_pay_for_a_handshake() {
+    EnergyBudget b(1.0f, 0.0f, 0.1f); // less than one handshake left
+    GatePolicyConfig cfg;
+    cfg.handshake_cost_j = 0.25f;
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.9f), b, cfg, 0) == GateAction::DROP);
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.5f), b, cfg, 0) == GateAction::DROP);
+    CHECK(b.balance_j() > 0.09f && b.balance_j() < 0.11f);
+}
+static void test_gate_budget_refills_and_admits_again() {
+    EnergyBudget b(1.0f, 1.0f, 0.0f); // 1 J/s refill
+    GatePolicyConfig cfg;
+    cfg.handshake_cost_j = 0.25f;
+    b.tick(0);
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.9f), b, cfg, 0) == GateAction::DROP);
+    CHECK(decide_admission(DefenseMode::GATE, gate_in(0.9f), b, cfg, 500) == GateAction::SPEND);
+}
+static void test_defense_mode_names_round_trip() {
+    const char* names[] = {"none", "ratelimit", "cookie", "gate"};
+    for (const char* n : names) {
+        DefenseMode m;
+        CHECK(parse_defense_mode(n, m));
+        CHECK(std::strcmp(defense_mode_name(m), n) == 0);
+    }
+    DefenseMode m = DefenseMode::GATE;
+    CHECK(!parse_defense_mode("GATE", m));    // exact lowercase, like the contract
+    CHECK(!parse_defense_mode("shields", m));
+    CHECK(!parse_defense_mode(nullptr, m));
+    CHECK(m == DefenseMode::GATE);            // untouched on failure
+}
+static void test_gate_action_contract_vocabulary() {
+    CHECK(std::strcmp(gate_action_name(GateAction::SPEND), "spend") == 0);
+    CHECK(std::strcmp(gate_action_name(GateAction::CHALLENGE), "challenge") == 0);
+    CHECK(std::strcmp(gate_action_name(GateAction::DROP), "drop") == 0);
+    CHECK(std::strcmp(gate_action_severity(GateAction::SPEND), "info") == 0);
+    CHECK(std::strcmp(gate_action_severity(GateAction::CHALLENGE), "low") == 0);
+    CHECK(std::strcmp(gate_action_severity(GateAction::DROP), "medium") == 0);
+}
+
+// ---------------------------------------------------------------------
+// gate_msgs: GATE_REPORT (field-1 -> gateway), CONTROL (gateway -> field-1)
+// ---------------------------------------------------------------------
+
+static void test_new_msg_types_are_valid_on_the_wire() {
+    CHECK(is_valid_msg_type(static_cast<uint8_t>(MsgType::GATE_REPORT)));
+    CHECK(is_valid_msg_type(static_cast<uint8_t>(MsgType::CONTROL)));
+    CHECK(!is_valid_msg_type(0x09));
+    PacketHeader h;
+    h.type = MsgType::GATE_REPORT;
+    h.sender = 1;
+    uint8_t buf[HEADER_SIZE];
+    CHECK(h.serialize(buf, sizeof(buf)) == HEADER_SIZE);
+    PacketHeader back;
+    CHECK(PacketHeader::deserialize(buf, sizeof(buf), back));
+    CHECK(back.type == MsgType::GATE_REPORT);
+}
+static void test_gate_report_round_trip() {
+    GateReport r;
+    r.sender = 3;
+    r.action = GateAction::CHALLENGE;
+    r.mode = DefenseMode::GATE;
+    r.budget_exhausted_edge = true;
+    r.prob_real = 0.21f;
+    r.budget_j = 12.5f;
+    r.budget_max_j = 40.0f;
+    uint8_t buf[GATE_REPORT_LEN];
+    CHECK(serialize_gate_report(r, buf, sizeof(buf)) == GATE_REPORT_LEN);
+    GateReport back;
+    CHECK(deserialize_gate_report(buf, sizeof(buf), back));
+    CHECK(back.sender == 3);
+    CHECK(back.action == GateAction::CHALLENGE);
+    CHECK(back.mode == DefenseMode::GATE);
+    CHECK(back.budget_exhausted_edge);
+    CHECK(back.prob_real == 0.21f);
+    CHECK(back.budget_j == 12.5f);
+    CHECK(back.budget_max_j == 40.0f);
+}
+static void test_gate_report_is_big_endian() {
+    GateReport r;
+    r.budget_max_j = 40.0f; // IEEE-754 0x42200000
+    uint8_t buf[GATE_REPORT_LEN];
+    serialize_gate_report(r, buf, sizeof(buf));
+    CHECK(buf[12] == 0x42 && buf[13] == 0x20 && buf[14] == 0x00 && buf[15] == 0x00);
+}
+static void test_gate_report_rejects_corruption() {
+    GateReport r;
+    uint8_t buf[GATE_REPORT_LEN];
+    serialize_gate_report(r, buf, sizeof(buf));
+    GateReport back;
+    CHECK(!deserialize_gate_report(buf, GATE_REPORT_LEN - 1, back)); // short
+    uint8_t bad_action[GATE_REPORT_LEN];
+    std::memcpy(bad_action, buf, sizeof(buf));
+    bad_action[1] = 7;
+    CHECK(!deserialize_gate_report(bad_action, sizeof(bad_action), back));
+    uint8_t bad_mode[GATE_REPORT_LEN];
+    std::memcpy(bad_mode, buf, sizeof(buf));
+    bad_mode[2] = 9;
+    CHECK(!deserialize_gate_report(bad_mode, sizeof(bad_mode), back));
+    uint8_t bad_flags[GATE_REPORT_LEN];
+    std::memcpy(bad_flags, buf, sizeof(buf));
+    bad_flags[3] = 0x80;
+    CHECK(!deserialize_gate_report(bad_flags, sizeof(bad_flags), back));
+    CHECK(serialize_gate_report(r, buf, GATE_REPORT_LEN - 1) == 0);
+}
+static void test_control_sequencer_orders_without_a_shared_clock() {
+    ControlSequencer q;
+    CHECK(q.accept(7, 0));    // first message ever
+    CHECK(q.accept(7, 1));    // newer
+    CHECK(!q.accept(7, 1));   // duplicate
+    CHECK(!q.accept(7, 0));   // older (a replay within the epoch)
+    CHECK(q.accept(9, 0));    // gateway rebooted: new epoch restarts the count
+    CHECK(q.accept(9, 5));
+    CHECK(!q.accept(9, 4));
+}
+static void test_control_round_trip_and_rejects_bad_mode() {
+    ControlMsg m;
+    m.kind = ControlKind::DEFENSE;
+    m.value = static_cast<uint8_t>(DefenseMode::COOKIE);
+    uint8_t buf[CONTROL_LEN];
+    CHECK(serialize_control(m, buf, sizeof(buf)) == CONTROL_LEN);
+    ControlMsg back;
+    CHECK(deserialize_control(buf, sizeof(buf), back));
+    CHECK(back.value == static_cast<uint8_t>(DefenseMode::COOKIE));
+    uint8_t bad_mode[CONTROL_LEN] = {1, 4};
+    CHECK(!deserialize_control(bad_mode, sizeof(bad_mode), back));
+    uint8_t bad_kind[CONTROL_LEN] = {2, 0};
+    CHECK(!deserialize_control(bad_kind, sizeof(bad_kind), back));
+    CHECK(!deserialize_control(buf, 1, back));
 }
 
 int main() {
@@ -579,6 +794,28 @@ int main() {
     RUN(test_energygate_healthy_sender_scores_high);
     RUN(test_energygate_flooding_sender_scores_low);
     RUN(test_energygate_score_bounded);
+    RUN(test_energygate_feature_order_matches_ml);
+    RUN(test_energygate_reads_frag_complete_from_slot_6);
+    RUN(test_energygate_reads_rssi_var_from_slot_3);
+
+    RUN(test_gate_none_always_spends_and_never_touches_budget);
+    RUN(test_gate_ratelimit_drops_a_flood_passes_a_slow_drip);
+    RUN(test_gate_cookie_challenges_until_echoed);
+    RUN(test_gate_spends_on_a_confident_score_and_charges_the_budget);
+    RUN(test_gate_challenges_a_middling_score_without_charging);
+    RUN(test_gate_drops_a_low_score);
+    RUN(test_gate_admits_a_returned_cookie_on_recheck);
+    RUN(test_gate_drops_when_the_budget_cannot_pay_for_a_handshake);
+    RUN(test_gate_budget_refills_and_admits_again);
+    RUN(test_defense_mode_names_round_trip);
+    RUN(test_gate_action_contract_vocabulary);
+
+    RUN(test_new_msg_types_are_valid_on_the_wire);
+    RUN(test_gate_report_round_trip);
+    RUN(test_gate_report_is_big_endian);
+    RUN(test_gate_report_rejects_corruption);
+    RUN(test_control_round_trip_and_rejects_bad_mode);
+    RUN(test_control_sequencer_orders_without_a_shared_clock);
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

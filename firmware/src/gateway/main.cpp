@@ -11,22 +11,20 @@
 //  - Drive the OLED / RGB LED / buzzer as a status indicator (brief v2
 //    section 10: green=secure, yellow=degraded, steady red=attack,
 //    flashing red=tamper).
-//  - v4 (brief v4 / docs/v4_energy_split.md): run EnergyGate admission
-//    control in front of the handshake — a cookie challenge plus an energy
-//    token bucket, deciding spend/challenge/drop per incoming HELLO and
-//    reporting the decision, draw spikes, and budget exhaustion to the
-//    console as gate_decision / energy_alert / budget_exhausted events.
+//  - v4: relay for EnergyGate, which runs on field-1 (the battery-powered
+//    node the INA219 measures -- brief v4 sections 1-4; this board is
+//    USB-powered, so gating here protected nothing the rig measures). The
+//    gateway forwards the console's `DEFENSE <mode>` line to field-1 as a
+//    CONTROL message, and turns field-1's GATE_REPORT messages into the
+//    console's gate_decision / budget_exhausted events ("node": "field-1").
+//    It still overhears the attacker's HELLOs for its trace windows, and it
+//    still owns the signed-handshake check (impersonation, demo beat 5).
 //
 // STATUS: structural skeleton wiring sentinel_proto together end to end.
 // The handshake/AEAD decrypt path is stubbed (TODO) pending the crypto
 // benchmark results (src/benchmark) deciding wolfCrypt vs PQClean vs the
 // HMAC-PSK fallback (auth_fallback.h) — see firmware/README.md. Not yet
 // build-verified on hardware (no ESP32 toolchain in this environment).
-// EnergyGate's cost table and budget parameters are placeholders (marked
-// below) until src/monitor's INA219 rig produces real mJ/operation numbers
-// — that measurement is explicitly firmware's own next step, not guessed
-// at here beyond what's needed to make the admission-control code path
-// exist and be reviewable.
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -39,9 +37,8 @@
 #include "sentinel_proto/field_model.h"
 #include "sentinel_proto/event.h"
 #include "sentinel_proto/trace.h"
-#include "sentinel_proto/cookie.h"
-#include "sentinel_proto/energy_budget.h"
-#include "sentinel_proto/energygate.h"
+#include "sentinel_proto/gate_policy.h"
+#include "sentinel_proto/gate_msgs.h"
 #include "common/board_config.h"
 #include "common/status_indicators.h"
 
@@ -61,46 +58,16 @@ static TraceWindowCounters g_window;
 static uint32_t g_window_start_ms = 0;
 static const uint32_t WINDOW_MS = 5000;
 
-// v4: cookie challenge + energy budget. Secret should be re-rolled from
-// esp_random() at boot on target; fixed constant here is a host-buildable
-// placeholder (this file only compiles for ARDUINO anyway).
-static CookieChallenge g_cookie(0xC0FFEE01);
-
-// TODO placeholders -- replace once src/monitor's INA219 rig has measured
-// real per-operation costs and a real battery capacity for the demo cell.
-constexpr float ENERGY_BUDGET_CAPACITY_J = 20.0f;
-constexpr float ENERGY_BUDGET_REFILL_J_PER_S = 0.05f;
-// Conservative: charge the worst case (ML-KEM-1024) for every handshake
-// attempt until the HELLO payload can actually be parsed (decrypt path is
-// still TODO, see on_mesh_packet) to read which level was requested.
-constexpr float PLACEHOLDER_HANDSHAKE_COST_J = 0.02f;
-
-static EnergyBudget g_energy(ENERGY_BUDGET_CAPACITY_J, ENERGY_BUDGET_REFILL_J_PER_S);
-static bool g_budget_exhausted_notified = false;
-
-// EnergyGate admission thresholds on the [0,1] "probability sender is
-// real" score. Tune once real recorded traces exist (same caveat as
-// field_model.h's rule thresholds).
-constexpr float GATE_SPEND_THRESHOLD = 0.7f;
-constexpr float GATE_CHALLENGE_THRESHOLD = 0.4f;
-
-enum class GateAction { SPEND, CHALLENGE, DROP };
-static const char* gate_action_name(GateAction a) {
-    switch (a) {
-        case GateAction::SPEND: return "spend";
-        case GateAction::CHALLENGE: return "challenge";
-        case GateAction::DROP: return "drop";
-    }
-    return "drop";
-}
-static const char* gate_action_severity(GateAction a) {
-    switch (a) {
-        case GateAction::SPEND: return "info";
-        case GateAction::CHALLENGE: return "low";
-        case GateAction::DROP: return "medium";
-    }
-    return "medium";
-}
+// v4: the defence mode the console selected (`DEFENSE <mode>`), relayed to
+// field-1, which is where EnergyGate actually runs. Kept here only to relay
+// it and show it on the OLED.
+static DefenseMode g_defense = DefenseMode::NONE;
+// Re-sent periodically as well as on change: field-1 may reboot or miss a
+// packet, and a stale mode would silently invalidate an experiment row.
+constexpr uint32_t CONTROL_RESEND_MS = 30000;
+static uint32_t g_last_control_ms = 0;
+static uint32_t g_ctrl_seq = 0;
+static uint16_t g_ctrl_epoch = 0; // random per boot (setup()), see ControlSequencer
 
 // Current LABEL from the console (set via `LABEL <x>` serial command),
 // tags the TRC lines that follow it until changed again. "normal" until
@@ -143,17 +110,30 @@ static void emit_event(const char* layer, const char* type, const char* severity
     Serial.println(to_evt_line(evt));
 }
 
-// v4: gate_decision. `score` is the model's probability the sender is
-// real -- contract-required to live at the Event's top level, NOT
-// duplicated into details (contracts/CHANGELOG.md 2026-09-18, corrected
-// entry). `sender_id` is optional free text per the schema.
-static void emit_gate_decision(const char* node, GateAction action, const char* sender_id,
-                                float score, const char* summary) {
-    JsonDocument evt = new_event("field", "gate_decision", gate_action_severity(action),
-                                  node, nullptr, summary);
-    evt["score"] = score;
-    evt["details"]["action"] = gate_action_name(action);
-    if (sender_id) evt["details"]["sender"] = sender_id;
+static const char* node_name_for(uint8_t sender) {
+    switch (static_cast<NodeId>(sender)) {
+        case NodeId::FIELD_1: return "field-1";
+        case NodeId::GATEWAY: return "gateway";
+        case NodeId::ATTACKER: return "attacker";
+    }
+    return "unknown";
+}
+
+// v4: gate_decision, on field-1's behalf. `score` is the model's probability
+// the sender is real -- contract-required at the Event's top level, not in
+// details. details.sender is the node whose HELLO was ruled on; budget_j /
+// budget_max_j are the optional fields GET /status reads.
+static void emit_gate_decision(const GateReport& r) {
+    char summary[80];
+    snprintf(summary, sizeof(summary), "EnergyGate %s for %s (defence: %s)",
+             gate_action_name(r.action), node_name_for(r.sender), defense_mode_name(r.mode));
+    JsonDocument evt = new_event("field", "gate_decision", gate_action_severity(r.action),
+                                  "field-1", nullptr, summary);
+    evt["score"] = r.prob_real;
+    evt["details"]["action"] = gate_action_name(r.action);
+    evt["details"]["sender"] = node_name_for(r.sender);
+    evt["details"]["budget_j"] = r.budget_j;
+    evt["details"]["budget_max_j"] = r.budget_max_j;
     Serial.println(to_evt_line(evt));
 }
 
@@ -224,9 +204,9 @@ static void close_detection_window(uint32_t now_ms) {
         const char* kind = to_contract_attack_kind(cls); // replay_campaign | handshake_flood | impersonation
         g_status = StatusColor::STEADY_RED;
         buzz_alert();
+        String summary = String("Detection window classified as ") + kind;
         emit_event("field", "attack_detected", "high", "gateway", nullptr,
-                   String("Detection window classified as ") + kind,
-                   kind, nullptr, nullptr, kind);
+                   summary.c_str(), kind, nullptr, nullptr, kind);
         // TODO: once this is wired to the real sender identity (not just
         // "gateway"), call lockout_sender() here too — currently only the
         // per-packet replay_rejected path below has a concrete sender id
@@ -241,16 +221,6 @@ static void close_detection_window(uint32_t now_ms) {
         g_status = StatusColor::GREEN;
     }
 
-    // v4: budget_exhausted is edge-triggered (fires once when the bucket
-    // hits zero, not once per window while it stays there) so it doesn't
-    // spam the console every 5s during a sustained drain attack.
-    g_energy.tick(now_ms);
-    if (g_energy.exhausted() && !g_budget_exhausted_notified) {
-        g_budget_exhausted_notified = true;
-        emit_budget_exhausted("gateway", "Energy budget exhausted -- EnergyGate will drop admissions until it refills");
-    } else if (!g_energy.exhausted()) {
-        g_budget_exhausted_notified = false;
-    }
 
     g_window.reset();
     g_window.window_ms = WINDOW_MS;
@@ -261,6 +231,29 @@ static void close_detection_window(uint32_t now_ms) {
 // Serial line handling: console -> gateway (LABEL), gateway -> console (EVT/TRC/LOG)
 // ---------------------------------------------------------------------
 
+// Relays the current defence mode to field-1 as a CONTROL message. Same
+// structural transport stub as the rest of this file -- TODO: hand the
+// fragments to ESP-NOW (and AES-GCM encrypt) once the radio driver exists.
+static void send_control_to_field_node(uint32_t now_ms) {
+    ControlMsg m;
+    m.kind = ControlKind::DEFENSE;
+    m.value = static_cast<uint8_t>(g_defense);
+    uint8_t payload[CONTROL_LEN];
+    serialize_control(m, payload, sizeof(payload));
+
+    PacketHeader hdr;
+    hdr.type = MsgType::CONTROL;
+    hdr.sender = static_cast<uint8_t>(NodeId::GATEWAY);
+    hdr.epoch = g_ctrl_epoch;
+    hdr.seq = g_ctrl_seq++;
+    hdr.time_ms = now_ms;
+    auto frags = Fragmenter::split(hdr, payload, sizeof(payload));
+    for (auto& frag : frags) {
+        (void)frag; // TODO: mesh transport (ESP-NOW) -> field-1
+    }
+    g_last_control_ms = now_ms;
+}
+
 static void handle_console_line(const String& line) {
     if (line.startsWith("LABEL ")) {
         String label = line.substring(6);
@@ -268,17 +261,37 @@ static void handle_console_line(const String& line) {
         label.toCharArray(g_current_label, sizeof(g_current_label));
         Serial.print("LOG label set to ");
         Serial.println(g_current_label);
+    } else if (line.startsWith("DEFENSE ")) {
+        // contracts/CONTRACT.md: `DEFENSE <none|ratelimit|cookie|gate>`. The
+        // gateway does not act on it -- field-1 runs EnergyGate -- it relays it.
+        String mode = line.substring(8);
+        mode.trim();
+        DefenseMode parsed;
+        if (parse_defense_mode(mode.c_str(), parsed)) {
+            g_defense = parsed;
+            send_control_to_field_node(millis());
+            Serial.printf("LOG defence mode %s relayed to field-1\n", defense_mode_name(g_defense));
+        } else {
+            Serial.print("LOG unknown defence mode: ");
+            Serial.println(mode);
+        }
     }
-    // TODO (v4): the frontend kit's POST /mode and POST /attack reach the
-    // boards over serial per docs/v4_energy_split.md, but the exact new
-    // line(s) -- e.g. `MODE gate` alongside the existing `LABEL <x>`, and
-    // whether `attack_profile` reaches the attacker board via a gateway
-    // relay or a second serial port -- are still open, coordinated with
-    // Claude 2 (console owns the freeze). Add the parsing here once that's
-    // settled; don't guess at the line format ahead of the contract entry.
+    // Anything else (e.g. the attacker's MODE lines) is ignored: the console
+    // sends every control line to every board, and each acts on its own.
+}
 
-    // Anything else from the console on this line is ignored per contract
-    // (only LABEL is currently defined console -> gateway).
+// v4: one EnergyGate decision from field-1 -> the console's events.
+static void on_gate_report(const uint8_t* payload, size_t payload_len) {
+    GateReport r;
+    if (!deserialize_gate_report(payload, payload_len, r)) {
+        Serial.println("LOG malformed GATE_REPORT from field-1 dropped");
+        return;
+    }
+    emit_gate_decision(r);
+    if (r.budget_exhausted_edge) {
+        emit_budget_exhausted("field-1",
+                              "EnergyGate budget exhausted on field-1 -- dropping admissions until it refills");
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -304,44 +317,11 @@ static void on_mesh_packet(const PacketHeader& hdr, const uint8_t* payload, size
         g_window.hs_count++;
         if (hdr.frag_i == 0) g_window.frag_sets_started++;
 
-        // v4 EnergyGate: decide spend/challenge/drop BEFORE any signature
-        // verification work runs, so an attacker can't burn CPU/energy
-        // just by claiming to be someone -- that's the whole point of
-        // putting this ahead of the handshake rather than after it fails.
-        float features[ENERGYGATE_NUM_FEATURES] = {
-            g_window.hs_per_s(),
-            static_cast<float>(g_window.hs_fail),
-            g_window.frag_complete_pct(),
-            g_window.loss_pct(),
-            g_window.dup_pct(),
-            g_window.rssi_mean(),
-            g_window.rssi_var(),
-            g_window.battery_pct >= 0.0f ? g_window.battery_pct : 100.0f,
-        };
-        float prob_real = energygate_score(features);
-
-        GateAction action;
-        if (prob_real >= GATE_SPEND_THRESHOLD && g_energy.can_afford(PLACEHOLDER_HANDSHAKE_COST_J, now_ms)) {
-            g_energy.spend(PLACEHOLDER_HANDSHAKE_COST_J, now_ms);
-            action = GateAction::SPEND;
-        } else if (prob_real >= GATE_CHALLENGE_THRESHOLD && !g_energy.exhausted()) {
-            action = GateAction::CHALLENGE;
-            // Issue (but don't yet send -- no wire slot for it until the
-            // HELLO/RESPONSE messages are actually implemented, see brief
-            // v2 6.2) a cookie the sender must echo before the gateway
-            // commits reassembly/CPU time to a full handshake attempt.
-            uint8_t cookie[COOKIE_LEN];
-            g_cookie.generate(hdr.sender, CookieChallenge::time_window_for(now_ms), cookie);
-            (void)cookie; // TODO: send once HELLO/RESPONSE framing exists; verify the echo with g_cookie.verify()
-        } else {
-            action = GateAction::DROP;
-        }
-        emit_gate_decision("gateway", action, node_name, prob_real,
-                            String("EnergyGate ") + gate_action_name(action) + " for handshake attempt");
-
-        if (action == GateAction::DROP) {
-            return; // don't spend any more effort on a dropped attempt
-        }
+        // Counted for the trace windows (FieldGuard, and EnergyGate's
+        // training data) whether the HELLO was meant for us or overheard on
+        // its way to field-1, and it continues through the replay check and
+        // reassembly below exactly as before, so the recorded windows keep
+        // their meaning. EnergyGate itself runs on field-1, not here.
 
         // TODO: verify ML-DSA signature by the sender over the HELLO
         // contents (brief v2 6.2: "ML-DSA signature by A over all of it"),
@@ -387,6 +367,15 @@ static void on_mesh_packet(const PacketHeader& hdr, const uint8_t* payload, size
     g_window.frag_sets_completed++;
 
     g_window.packets_received++;
+
+    // v4: field-1's EnergyGate decisions. (TODO: decrypt first, like DATA.)
+    if (hdr.type == MsgType::GATE_REPORT) {
+        if (hdr.sender == static_cast<uint8_t>(NodeId::FIELD_1)) {
+            on_gate_report(reassembled.data(), reassembled.size());
+        }
+        return;
+    }
+
     // TODO: AES-256-GCM decrypt `reassembled` with the per-direction key
     // derived at handshake time (nonce = sender||epoch||seq, GCM tag
     // verified against the associated-data header, per brief v2 6.1),
@@ -409,9 +398,8 @@ static void update_status_display() {
         (g_status == StatusColor::FLASHING_RED) ? "TAMPER" :
         (g_status == StatusColor::STEADY_RED)   ? "ATTACK DETECTED" :
         (g_status == StatusColor::YELLOW)       ? "Degraded, still secure" : "Secure";
-    g_oled.printf("SentinelMesh gateway\nlabel: %s\nbudget: %d/%dJ\n%s\n",
-                  g_current_label, static_cast<int>(g_energy.balance_j()),
-                  static_cast<int>(g_energy.capacity_j()), status_text);
+    g_oled.printf("SentinelMesh gateway\nlabel: %s\ndefence: %s\n%s\n",
+                  g_current_label, defense_mode_name(g_defense), status_text);
     g_oled.display();
 }
 
@@ -430,6 +418,7 @@ void setup() {
     g_window.reset();
     g_window.window_ms = WINDOW_MS;
     g_window_start_ms = millis();
+    g_ctrl_epoch = static_cast<uint16_t>(esp_random());
 
     Serial.println("LOG gateway boot complete");
 
@@ -437,10 +426,9 @@ void setup() {
     // register on_mesh_packet() as the receive callback. TODO: run the
     // crypto work in its own FreeRTOS task with a large stack (brief v2
     // section 8: "Run the crypto in its own FreeRTOS task with a large
-    // stack"). TODO (v4): once src/monitor's INA219 rig can report draw
-    // over serial/radio to the gateway, call emit_energy_alert() from
-    // wherever that telemetry lands, and replace
-    // PLACEHOLDER_HANDSHAKE_COST_J / ENERGY_BUDGET_* with measured values.
+    // stack"). TODO (v4): the monitor board reports draw to the console
+    // directly (NRG lines on its own USB serial), so emit_energy_alert() has
+    // no data path here yet.
 }
 
 void loop() {
@@ -456,7 +444,9 @@ void loop() {
     set_status_color(g_status);
 
     uint32_t now = millis();
-    g_energy.tick(now);
+    if (now - g_last_control_ms >= CONTROL_RESEND_MS) {
+        send_control_to_field_node(now); // keep field-1's mode in sync
+    }
     if (now - g_window_start_ms >= WINDOW_MS) {
         size_t evicted = g_reassembler.expire(now);
         g_window.frag_timeout += static_cast<uint32_t>(evicted);

@@ -160,3 +160,37 @@ def test_rig_draw_mirrors_the_hypothesis_it_illustrates():
     assert d["loud"]["none"] > 4 * mock_rig.IDLE_MW                 # a flood drains the cell
     assert d["slow_drip"]["ratelimit"] == d["slow_drip"]["none"]    # the drip slips under a rate limit
     assert d["loud"]["gate"] < d["loud"]["cookie"] < d["loud"]["ratelimit"] < d["loud"]["none"]
+
+
+# -- firmware shapes (EnergyGate on field-1, relayed by the gateway) ----------
+
+def _gateway_gate_decision(action, severity, sender, score, budget, budget_max, uptime_ms):
+    """Mirrors firmware/src/gateway/main.cpp emit_gate_decision(): new_event()'s
+    skeleton (empty reasons, uptime ts) plus score and details."""
+    return {"id": "3f1c2b4e-0000-4000-8000-000000000001", "ts": uptime_ms, "layer": "field",
+            "type": "gate_decision", "severity": severity, "score": score, "node": "field-1",
+            "technique": None, "summary": f"EnergyGate {action} for {sender} (defence: gate)",
+            "reasons": [], "details": {"action": action, "sender": sender,
+                                       "budget_j": budget, "budget_max_j": budget_max}}
+
+
+def test_the_gateways_relayed_gate_decision_validates():
+    for action, sev in (("spend", "info"), ("challenge", "low"), ("drop", "medium")):
+        ev = _gateway_gate_decision(action, sev, "attacker", 0.21, 12.5, 20.0, 45_000)
+        assert not validation.validate_event(ev)[1], action
+
+
+def test_the_gateways_relayed_budget_exhausted_validates():
+    ev = {"id": "3f1c2b4e-0000-4000-8000-000000000002", "ts": 46_000, "layer": "field",
+          "type": "budget_exhausted", "severity": "high", "score": None, "node": "field-1",
+          "technique": None, "summary": "EnergyGate budget exhausted on field-1",
+          "reasons": [], "details": {}}
+    assert not validation.validate_event(ev)[1]
+
+
+def test_the_monitor_boards_nrg_line_validates():
+    """firmware/src/monitor/main.cpp emit_nrg_line() format, byte for byte."""
+    line = 'NRG {"ts":123456,"power_mw":512.3,"volts":3.861,"amps":0.1327,"battery_pct":62.3}'
+    kind, _, body = line.partition(" ")
+    assert kind == "NRG"
+    assert not validation.validate_energy(json.loads(body))[1]

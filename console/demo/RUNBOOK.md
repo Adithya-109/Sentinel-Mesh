@@ -152,7 +152,7 @@ this sender is worth paying for."
 1. Defence → **EnergyGate**. The "EnergyGate on" marker appears on both charts.
 2. Point at the **EnergyGate decisions** feed: unknown sender **CHALLENGE**,
    then **DROP** when the cookie never comes back, each with its reasons;
-   field-1 still gets **SPEND**. Draw falls back toward idle.
+   the genuine gateway still gets **SPEND**. Draw falls back toward idle.
 3. Point at **Battery projection** (from the recorded experiment): the three
    lines and their flat-battery dates. **Say** which numbers are measured and
    that the day counts assume the cell's rated capacity.

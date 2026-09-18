@@ -14,7 +14,7 @@ Owns `console/` and `contracts/`. Reads `ml/` and `firmware/` to check
 integration; never edits them — problems there go to the human. Any contract
 change gets a `CHANGELOG.md` entry and an announcement to all three streams.
 
-## Deliverables — status (89 tests)
+## Deliverables — status (92 tests)
 
 v3:
 1. `api/` — FastAPI :8000, SQLite, `POST/GET /events`, `GET /incidents`, every
@@ -54,10 +54,16 @@ v4 (`docs/v4_energy_split.md`, Claude 2 section — all nine items done):
 - Contract: `DEFENSE` / `MODE` / `NRG` serial lines, `energy.schema.json`,
   optional `budget_j`/`budget_max_j` on `gate_decision`.
 
-**Waiting on other streams:** real boards + INA219 rig, `DEFENSE` handling and
-`MODE SLOW_DRIP` (Claude 3); the measured experiment table and legit-client
-numbers (firmware posts them to `POST /experiment/result`); real trace
-recordings for FieldGuard and EnergyGate.
+**EnergyGate lives on field-1, not the gateway** (moved 2026-09-18; see
+`contracts/CHANGELOG.md`). The gateway relays `DEFENSE` to field-1 and relays
+its decisions back as `gate_decision` with `"node": "field-1"`; the genuine
+sender that must still get through is the gateway itself, so the mocks show
+`sender: "gateway"` SPENDs. The monitor board now prints `NRG` lines.
+
+**Waiting on other streams:** real boards + INA219 rig and the ESP-NOW
+transport (every board's mesh send/receive is still a stub); the measured
+experiment table and legit-client numbers (firmware posts them to
+`POST /experiment/result`); real trace recordings for FieldGuard and EnergyGate.
 
 ## Console-specific facts (do not re-derive)
 

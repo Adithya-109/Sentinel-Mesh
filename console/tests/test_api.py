@@ -245,3 +245,39 @@ def test_session_name_cannot_escape_the_trace_directory():
 def test_health_reports_event_count():
     client.post("/events", json=event())
     assert client.get("/health").json()["events"] == 1
+
+
+# -- the built frontend's catch-all route -------------------------------------
+
+from api import config as _config  # noqa: E402
+
+needs_dist = pytest.mark.skipif(not os.path.isdir(_config.WEB_DIST),
+                                reason="web/dist not built (cd web && npm run build)")
+
+
+@needs_dist
+@pytest.mark.parametrize("path", [
+    "/..%2F..%2Fapi%2Fmain.py",
+    "/%2e%2e/%2e%2e/api/main.py",
+    "/..%5C..%5Capi%5Cmain.py",
+    "/..%2F..%2Fdata%2Fconsole.db",
+    "/C:%2FWindows%2Fwin.ini",
+])
+def test_spa_route_cannot_read_files_outside_web_dist(path):
+    r = client.get(path)
+    assert "import" not in r.text and "SQLite format" not in r.text and "[fonts]" not in r.text
+    assert r.status_code in (200, 404)
+    if r.status_code == 200:
+        assert "<!doctype html>" in r.text.lower()   # the app shell, nothing else
+
+
+@needs_dist
+def test_unknown_api_path_is_a_404_not_the_app_shell():
+    r = client.get("/api/statsu")
+    assert r.status_code == 404 and "json" in r.headers["content-type"]
+
+
+@needs_dist
+def test_client_side_routes_still_get_the_app_shell():
+    r = client.get("/dashboard")
+    assert r.status_code == 200 and "<!doctype html>" in r.text.lower()
