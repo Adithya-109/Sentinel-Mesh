@@ -1,0 +1,9 @@
+{
+  "name": "sentinel_proto",
+  "version": "0.1.0",
+  "description": "SentinelMesh shared wire protocol: packet header, fragmentation/reassembly, replay window, node types. Core is portable C++ (no Arduino.h) so it can be unit-tested on the host.",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "include"
+  }
+}
