@@ -7,11 +7,18 @@ asks "is the correlation ML?", the answer is no, and this file is the evidence.
 
 THE RULES, in the order they are applied
 ----------------------------------------
-R1. Informational events never form incidents.
+R1. Informational events and per-decision telemetry never form incidents.
     Severity `info` means "we looked and it was fine" (email_clean, file_clean)
-    or "routine housekeeping" (rekey). They are stored and shown on the
-    timeline, but they never start or join an incident -- otherwise a clean
-    inbox scan would manufacture an incident out of nothing.
+    or "routine housekeeping" (rekey). `gate_decision` (v4) is telemetry too:
+    EnergyGate emits one per admission decision, so during a drain attack it
+    arrives every few seconds at low/medium severity. Letting it correlate
+    would (a) count as a `field` layer hit, so an email + a file + routine gate
+    decisions would be misreported as a coordinated attack, and (b) keep the
+    sliding window open indefinitely, swallowing unrelated alerts into one
+    incident. All of these are stored and shown on the timeline and the gate
+    feed; they never start or join an incident. `energy_alert` and
+    `budget_exhausted` DO correlate -- they are discrete alerts, and a battery
+    drain is a genuine attack on the field network.
 
 R2. Events are grouped by a sliding time window (default 10 minutes).
     Walking the alerts oldest-first, an alert joins the current incident if it
@@ -43,6 +50,9 @@ SEVERITY_RANK = {s: i for i, s in enumerate(SEVERITY_ORDER)}
 
 COORDINATED_LAYERS = {"mail", "file", "field"}
 
+# Event types that are telemetry, not alerts, regardless of severity (R1).
+TELEMETRY_TYPES = {"gate_decision"}
+
 
 def severity_rank(severity: str) -> int:
     return SEVERITY_RANK.get(severity, 0)
@@ -54,7 +64,7 @@ def escalate(severity: str, steps: int = 1) -> str:
 
 def _title(layers_in_order: list[str], worst_event: dict, coordinated: bool) -> str:
     if coordinated:
-        return "Coordinated attack: inbox -> endpoint -> field network"
+        return "Coordinated attack: inbox → endpoint → field network"
     if len(set(layers_in_order)) >= 2:
         names = " + ".join(dict.fromkeys(layers_in_order))
         return f"Multi-layer activity: {names}"
@@ -103,7 +113,9 @@ def build_incidents(events: Iterable[dict], window_ms: int = None) -> list[dict]
     """Group events into incidents. Newest incident first."""
     window_ms = config.INCIDENT_WINDOW_MS if window_ms is None else window_ms
 
-    alerts = [e for e in events if severity_rank(e.get("severity", "info")) > 0]   # R1
+    alerts = [e for e in events                                                   # R1
+              if severity_rank(e.get("severity", "info")) > 0
+              and e.get("type") not in TELEMETRY_TYPES]
     alerts.sort(key=lambda e: e["ts"])
 
     groups: list[list[dict]] = []

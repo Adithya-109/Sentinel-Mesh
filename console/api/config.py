@@ -29,3 +29,24 @@ INCIDENT_WINDOW_MS = int(os.environ.get("SENTINEL_INCIDENT_WINDOW_MS", 10 * 60 *
 
 # Where the ML stream's charts and metrics live, for the Evidence page (read-only).
 ML_REPORTS_DIR = os.environ.get("SENTINEL_ML_REPORTS", os.path.join(REPO_DIR, "ml", "reports"))
+
+# -- v4 energy -------------------------------------------------------------
+
+# Cell capacity used to turn measured draw into "projected days". One 18650 at
+# 2500 mAh x 3.7 V = 9.25 Wh (brief v2 BOM). An assumption, not a measurement --
+# the UI labels projections as estimates. Override for a different cell.
+BATTERY_WH = float(os.environ.get("SENTINEL_BATTERY_WH", 9.25))
+
+# Idle draw. Unset = derived from data (see energy.baseline_mw). Set it once the
+# rig has measured the real idle figure.
+BASELINE_MW = float(os.environ["SENTINEL_BASELINE_MW"]) if os.environ.get("SENTINEL_BASELINE_MW") else None
+
+# Default length of one experiment-table run.
+EXPERIMENT_DURATION_S = int(os.environ.get("SENTINEL_EXPERIMENT_DURATION_S", 120))
+
+# A node not heard from for this long is shown offline.
+OFFLINE_AFTER_MS = int(os.environ.get("SENTINEL_OFFLINE_AFTER_MS", 120_000))
+
+# Where the built React frontend lives; served at / when present.
+WEB_DIST = os.environ.get("SENTINEL_WEB_DIST", os.path.join(CONSOLE_DIR, "web", "dist"))
+ENERGY_SCHEMA_PATH = os.path.join(CONTRACTS_DIR, "energy.schema.json")

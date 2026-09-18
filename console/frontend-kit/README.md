@@ -1,5 +1,16 @@
 # SentinelMesh console — frontend kit
 
+> **Stood up (2026-09-18):** the running app built from this kit is
+> `console/web/` — `npm run build` there, and the console API serves it at
+> http://127.0.0.1:8000/. This folder stays as the reference: the fixtures, and
+> `src/types.ts` / `src/api.ts`, which `web/src/` copies verbatim (keep them
+> identical). The types were updated for the implemented backend: nullable
+> numbers where there may be no data yet, a `link: "offline"` state, SIMULATED
+> flags, and the extra attack profiles — see the header of `src/types.ts`.
+> Also: use `http://127.0.0.1:8000` in the proxy below, not `localhost`
+> (~2 s per request on this Windows machine), and the backend already serves
+> everything under `/api`, so no path rewrite is needed.
+
 Everything here is for the person building the UI. You can start **before the backend exists**.
 
 ## Start now, with no backend

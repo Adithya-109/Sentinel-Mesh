@@ -130,7 +130,9 @@
             "required": ["action"],
             "properties": {
               "action": {"enum": ["spend", "challenge", "drop"]},
-              "sender": {"type": "string"}
+              "sender": {"type": "string"},
+              "budget_j": {"type": "number", "minimum": 0, "description": "optional: token-bucket balance after this decision; the console's GET /status shows the latest one"},
+              "budget_max_j": {"type": "number", "minimum": 0, "description": "optional: bucket capacity"}
             }
           }
         },

@@ -9,7 +9,11 @@ Console-local (not contract surface -- see contracts/CHANGELOG.md):
     GET  /health
     GET/POST /recording, POST /recording/{start,stop,label}
     GET/POST /traces
-    DELETE /events
+    DELETE /events, POST /reset
+    v4 (api/v4.py): GET /status, GET/POST /energy, GET /experiment, GET /control,
+        POST /mode, POST /attack, POST /experiment/{run,stop,result}
+    /api/* (api/frontend.py + v4.py): the same, in frontend-kit/src/types.ts shapes,
+        plus POST /api/scan/{email,file}. Built React app served at / if present.
 
 Run:
     uvicorn api.main:app --port 8000        # from console/
@@ -22,12 +26,50 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from . import attack, config, correlation, db, validation
+from . import attack, config, correlation, db, energy, frontend, v4, validation
 
-app = FastAPI(title="SentinelMesh console", version="1.0")
+app = FastAPI(title="SentinelMesh console", version="2.0")
 
 _conn = db.connect()
+
+# nodes whose events prove the gateway relayed them (field/tamper EVTs only
+# ever come off the gateway's serial port)
+_GATEWAY_LAYERS = {"field", "tamper"}
+
+
+def store_event(payload: Any) -> tuple[dict, list[str]]:
+    """Validate, normalize and store one event. Shared by POST /events and the
+    /api/scan proxy, so every path into the database gets the same checks.
+
+    Board timestamps are uptime millis() (no wall clock on an ESP32), so a ts
+    below 1e12 is replaced with arrival time and kept as details.device_ts.
+    Without this, a real hardware event would land in 1970 and never correlate
+    with the mail/file events of the same attack (CONTRACT.md, "Timestamps").
+    """
+    event, errors = validation.validate_event(payload)
+    if errors:
+        return {}, errors
+    ts, device_ts = energy.normalize_ts(event["ts"])
+    if device_ts is not None:
+        event["ts"] = ts
+        event["details"] = {**event["details"], "device_ts": device_ts}
+    stored = db.insert_event(_conn, event)
+    if stored:
+        if event.get("node"):
+            db.touch_node(_conn, event["node"], event["ts"])
+        if event["layer"] in _GATEWAY_LAYERS:
+            db.touch_node(_conn, "gateway", event["ts"])
+    event["_stored"] = stored
+    return event, []
+
+
+v4.bind(_conn)
+frontend.bind(_conn, store_event)
+app.include_router(v4.router)                      # /status, /energy, ... (root)
+app.include_router(v4.router, prefix="/api")       # same handlers for the React app
+app.include_router(frontend.router, prefix="/api") # /api/events, /api/incidents, /api/scan/*
 
 TRACE_LABELS = ["normal", "weak_link", "replay", "flood", "impersonation"]
 _SAFE_SESSION = re.compile(r"[^A-Za-z0-9_-]+")
@@ -63,15 +105,14 @@ async def post_event(request: Request):
     except Exception:
         raise HTTPException(400, "body must be JSON")
 
-    event, errors = validation.validate_event(payload)
+    event, errors = store_event(payload)
     if errors:
         return JSONResponse(
             status_code=422,
             content={"detail": "event does not match contracts/event.schema.json", "errors": errors},
         )
-
-    stored = db.insert_event(_conn, event)
-    return {"id": event["id"], "stored": stored, "duplicate": not stored}
+    stored = event.pop("_stored")
+    return {"id": event["id"], "stored": stored, "duplicate": not stored, "ts": event["ts"]}
 
 
 @app.get("/events")
@@ -101,6 +142,28 @@ def delete_events():
     """Reset the demo database between rehearsals."""
     n = db.clear_events(_conn)
     return {"deleted": n}
+
+
+@app.post("/reset")
+@app.post("/api/reset")
+def reset_demo():
+    """Clean slate before presenting: events, energy samples and markers, node
+    liveness, and the controls back to off.
+
+    Kept: finished experiment rows and recorded trace files. Both are evidence
+    recorded before the pitch, and the runbook has the operator reset right
+    before presenting -- wiping them there would destroy the measured table.
+    A run still in progress is dropped: its samples are gone, so it could only
+    finish with a wrong number. (DELETE /experiment clears the table on purpose.)
+    """
+    n = db.clear_events(_conn)
+    for table in ("energy_samples", "energy_markers", "node_seen"):
+        _conn.execute(f"DELETE FROM {table}")
+    _conn.execute("DELETE FROM experiment WHERE status = 'running'")
+    _conn.commit()
+    db.set_mode(_conn, "none")
+    db.set_attack(_conn, "none")
+    return {"ok": True, "events_deleted": n}
 
 
 # -- trace recording -------------------------------------------------------
@@ -173,6 +236,14 @@ async def post_trace(request: Request):
     the ML stream's features.
     """
     body = await _json_body(request)
+    # Any TRC line proves the gateway is alive and says how well it hears
+    # field-1, whether or not we are recording -- /status wants both.
+    now = energy.now_ms()
+    db.touch_node(_conn, "gateway", now)
+    if isinstance(body.get("rssi_mean"), (int, float)):
+        db.touch_node(_conn, "field-1", now, rssi=body["rssi_mean"],
+                      battery_pct=body.get("battery_pct") if isinstance(body.get("battery_pct"), (int, float)) else None)
+
     rec = db.get_recording(_conn)
     if not rec["active"]:
         return {"stored": False, "reason": "not recording"}
@@ -210,3 +281,10 @@ async def _json_body(request: Request) -> dict[str, Any]:
     except Exception:
         return {}
     return body if isinstance(body, dict) else {}
+
+
+# The built React frontend (console/web/dist), if present, at /. Mounted last so
+# every API route above wins; the app then calls /api/* on the same origin and
+# needs no dev proxy for the demo.
+if os.path.isdir(config.WEB_DIST):
+    app.mount("/", StaticFiles(directory=config.WEB_DIST, html=True), name="web")

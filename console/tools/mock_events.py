@@ -5,14 +5,23 @@ are wired up, so this posts the five-beat story from brief v3 section 10 --
 phishing email -> malicious attachment -> replay -> impersonation -> case
 opened -- straight to the console API with realistic gaps between beats.
 
-The `reasons` strings copy the exact shapes the real detectors emit
-(MailGuard: "'token' -> malicious signal (+0.123)", FileGuard:
-"ImageBase=4194304 (contrib +1.234)") so the Why panel looks the same whether
-an event came from here or from the real ML service.
+The `reasons` strings are verbatim output of the real detectors'
+`ml/sentinel_ml/reasons.py` (humanize_mail_reason / humanize_file_reason) for
+these tokens and features, so the Why panel looks the same whether an event
+came from here or from the real ML service. If the ML stream changes that
+phrasing again, regenerate these rather than hand-editing them.
 
     python tools/mock_events.py                 # full story, demo pacing
     python tools/mock_events.py --speed 10      # 10x faster, for development
     python tools/mock_events.py --dry-run       # print events, post nothing
+    python tools/mock_events.py --story drain   # v4 only: drain attack -> EnergyGate
+
+Stories: `classic` is the v3 five beats. `drain` is brief v4's beats 3-4 -- "the
+moment that sells the project": a loud drain attack against an undefended node,
+then EnergyGate switched on. The drain beats also press the real demo controls
+(POST /attack, POST /mode), so the chart gets its "attack starts" / "EnergyGate
+on" markers and, if tools/mock_rig.py is running, the simulated draw visibly
+spikes and then recovers. `full` (the default) is classic then drain.
 """
 import argparse
 import json
@@ -32,7 +41,8 @@ STORY = [
         "layer": "mail", "type": "email_clean", "severity": "info", "score": 0.03,
         "node": None, "technique": None,
         "summary": "Email looks clean",
-        "reasons": ["'meeting' -> legit signal (-0.412)", "'attached agenda' -> legit signal (-0.287)"],
+        "reasons": ["the word 'meeting' moderately suggests legitimate",
+                    "the word 'attached agenda' slightly suggests legitimate"],
         "details": {"subject": "Re: Tuesday maintenance window", "from": "ops@grid-utility.example"},
     }, "background traffic: an ordinary email scores clean"),
 
@@ -49,9 +59,9 @@ STORY = [
         "node": None, "technique": "T1566.001",
         "summary": "Malicious email detected",
         "reasons": [
-            "'urgent' -> malicious signal (+0.734)",
-            "'verify your account' -> malicious signal (+0.618)",
-            "'click numtok' -> malicious signal (+0.455)",
+            "urgency language ('urgent') -- moderately suggests phishing",
+            "the word 'verify your account' moderately suggests phishing",
+            "the word 'click numtok' moderately suggests phishing",
         ],
         "details": {"subject": "URGENT: substation access review - action required",
                     "from": "it-security@grid-utillty.example",
@@ -63,9 +73,12 @@ STORY = [
         "node": None, "technique": "T1204.002",
         "summary": "Malicious file detected",
         "reasons": [
-            "ImageBase=4194304 (contrib +2.418)",
-            "SectionsMaxEntropy=7.91 (contrib +1.203)",
-            "ResourcesMaxEntropy=7.88 (contrib +0.874)",
+            "preferred load address (packers/malware often pick unusual values) "
+            "(ImageBase=4.1943e+06) -- strongly suggests malicious",
+            "highest section entropy (high = packed or encrypted code) "
+            "(SectionsMaxEntropy=7.91) -- moderately suggests malicious",
+            "highest resource entropy (high = a hidden compressed/encrypted payload) "
+            "(ResourcesMaxEntropy=7.88) -- moderately suggests malicious",
         ],
         "details": {"filename": "SCADA_access_review.exe", "source": "held-out dataset row",
                     "note": "no live malware: this is a held-out feature row"},
@@ -125,6 +138,54 @@ STORY = [
 ]
 
 
+# ("control", path, body) entries press a demo control instead of posting an event
+DRAIN = [
+    (4, ("control", "/mode", {"mode": "none"}), "defence off -- the node is undefended"),
+    (1, ("control", "/attack", {"profile": "loud"}),
+     "BEAT 3 -- a loud drain attack starts: handshake requests the node must pay for"),
+
+    (8, {
+        "layer": "field", "type": "energy_alert", "severity": "critical", "score": None,
+        "node": "field-1", "technique": None,
+        "summary": "Battery draw 6.1x baseline",
+        "reasons": ["draw 512 mW vs 84 mW idle", "handshake requests 40x normal rate",
+                    "projected battery life falls from weeks to about a day"],
+        "details": {"draw_mw": 512.0, "baseline_mw": 84.0},
+    }, "BEAT 3b -- no packet was forged, yet the battery is the thing being attacked"),
+
+    (6, ("control", "/mode", {"mode": "gate"}), "BEAT 4 -- switch EnergyGate on"),
+
+    (3, {
+        "layer": "field", "type": "gate_decision", "severity": "low", "score": 0.21,
+        "node": "gateway", "technique": None,
+        "summary": "EnergyGate: CHALLENGE sent to unknown sender",
+        "reasons": ["no completed handshake before", "3 attempts in 4 s"],
+        "details": {"action": "challenge", "sender": "unknown-7f", "budget_j": 38.9, "budget_max_j": 40.0},
+    }, "BEAT 4a -- an unknown sender is challenged before any expensive crypto runs"),
+
+    (4, {
+        "layer": "field", "type": "gate_decision", "severity": "medium", "score": 0.06,
+        "node": "gateway", "technique": None,
+        "summary": "EnergyGate: DROP (cookie never returned)",
+        "reasons": ["cookie not echoed", "fragments never complete (12% complete)",
+                    "no completed handshake before"],
+        "details": {"action": "drop", "sender": "unknown-7f", "budget_j": 38.9, "budget_max_j": 40.0},
+    }, "BEAT 4b -- the attacker never answers the challenge, so it is dropped for pennies"),
+
+    (5, {
+        "layer": "field", "type": "gate_decision", "severity": "info", "score": 0.93,
+        "node": "gateway", "technique": None,
+        "summary": "EnergyGate: SPEND on field-1",
+        "reasons": ["known sender field-1", "fragments 100% complete", "RSSI steady (-51 dBm)"],
+        "details": {"action": "spend", "sender": "field-1", "budget_j": 36.8, "budget_max_j": 40.0},
+    }, "BEAT 4c -- the real sensor still gets through: the handshake is paid for, once"),
+
+    (8, ("control", "/attack", {"profile": "none"}), "attack stops"),
+]
+
+STORIES = {"classic": STORY, "drain": DRAIN, "full": STORY + DRAIN}
+
+
 def build(event: dict) -> dict:
     return {"id": str(uuid.uuid4()), "ts": int(time.time() * 1000), **event}
 
@@ -134,22 +195,38 @@ def main():
     ap.add_argument("--console", default=DEFAULT_CONSOLE)
     ap.add_argument("--speed", type=float, default=1.0, help="time compression; 10 = ten times faster")
     ap.add_argument("--dry-run", action="store_true", help="print the events instead of posting them")
-    ap.add_argument("--clear", action="store_true", help="DELETE /events first")
+    ap.add_argument("--clear", action="store_true", help="POST /reset first (events, energy, controls)")
+    ap.add_argument("--story", choices=list(STORIES), default="full")
     args = ap.parse_args()
 
     if args.clear and not args.dry_run:
         try:
-            requests.delete(f"{args.console}/events", timeout=5)
+            requests.post(f"{args.console}/reset", timeout=5)
             print("cleared existing events")
         except requests.RequestException as exc:
             print(f"could not clear events: {exc}", file=sys.stderr)
 
     posted = 0
-    for gap, template, caption in STORY:
+    story = STORIES[args.story]
+    for gap, template, caption in story:
         if gap:
             time.sleep(gap / max(args.speed, 0.01))
-        event = build(template)
 
+        if isinstance(template, tuple):                      # a demo control, not an event
+            _, path, body = template
+            if args.dry_run:
+                print(f"\n# {caption}\nPOST {path} {json.dumps(body)}")
+                continue
+            try:
+                requests.post(f"{args.console}{path}", json=body, timeout=5)
+            except requests.RequestException as exc:
+                print(f"! console unreachable: {exc}", file=sys.stderr)
+                return 1
+            print(f"[ control] POST {path} {json.dumps(body)}")
+            print(f"           {caption}")
+            continue
+
+        event = build(template)
         if args.dry_run:
             print(f"\n# {caption}")
             print(json.dumps(event))
@@ -168,8 +245,9 @@ def main():
         else:
             print(f"! {r.status_code} {r.text[:300]}", file=sys.stderr)
 
-    print(f"\n{posted}/{len(STORY)} events posted. "
-          f"Open the console UI -- they should be one incident.")
+    n_events = sum(1 for _, t, _ in story if not isinstance(t, tuple))
+    print(f"\n{posted}/{n_events} events posted. "
+          f"Open the console UI -- the attack-chain beats should be one incident.")
     return 0
 
 

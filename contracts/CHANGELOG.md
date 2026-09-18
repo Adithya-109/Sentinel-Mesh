@@ -5,6 +5,54 @@ streams.** Entries are newest first.
 
 ---
 
+## 2026-09-18 — v4 endpoints, control serial lines, NRG line, board timestamps
+
+Closes the "still open" item below: the six endpoints the frontend kit assumed
+are implemented (console-local, shapes in `console/frontend-kit/src/types.ts`),
+and the cross-team pieces are fixed here. **Firmware (Claude 3) should read
+points 1-4; ML (Claude 1) is unaffected.**
+
+1. **`DEFENSE <none|ratelimit|cookie|gate>`**, console -> gateway. Not `MODE`,
+   as `docs/v4_energy_split.md` suggested: the attacker board *already* uses
+   `MODE REPLAY|FLOOD|IMPERSONATE|WEAK_LINK|OFF` for attack modes, and one word
+   meaning two things is a demo-day bug waiting to happen.
+2. **Attack control reuses the attacker's existing `MODE` commands.**
+   `POST /attack {profile}` sends `none`->`MODE OFF`, `loud`->`MODE FLOOD`,
+   `slow_drip`->`MODE SLOW_DRIP` (**new command** -- already on Claude 3's v4
+   list), `replay`/`impersonate`/`weak_link`->`MODE REPLAY|IMPERSONATE|WEAK_LINK`.
+   No gateway relay: the bridge sends every control line to every bridged port,
+   one bridge per board, and each board ignores what it does not handle. Both
+   boards already do (verified: attacker logs `LOG unknown command`, gateway
+   ignores non-LABEL lines). On start-up the bridge pushes current state once,
+   so a rebooted board resyncs.
+3. **`NRG <json>`**, monitor -> console: one INA219 reading per line, schema in
+   the new `energy.schema.json`. Required `power_mw`, `volts`, `amps`; optional
+   `ts`, `battery_pct`, `node` (default field-1). Continuous telemetry, never an
+   Event.
+4. **Board timestamps.** `firmware/`'s `new_event()` takes `uint32_t
+   ts_epoch_ms` and falls back to `millis()` -- but epoch ms (~1.8e12) does not
+   fit in 32 bits, so real hardware events will always carry uptime. Left alone
+   they land in 1970 and never correlate with the mail/file events of the same
+   attack, which breaks the "one incident" beat. The console now replaces any
+   `ts` below 1e12 with arrival time and keeps the original as
+   `details.device_ts`. **No firmware change needed**; worth fixing the
+   signature's comment so nobody tries to pass wall-clock time through it.
+5. `gate_decision.details` may carry **optional** `budget_j` / `budget_max_j`.
+   The bucket lives on the gateway and `GET /status` needs a source for
+   `budget_j`; this is additive, nothing required changed.
+
+Console-side changes the other streams should know about, not contract:
+- Correlation rule R1 now also excludes `gate_decision`. Leaving R1-R5
+  untouched (as the split doc suggested) was measurably wrong: an email + a file
+  + routine gate decisions was reported as a critical "coordinated attack", and a
+  steady stream of decisions held the window open so a tamper 40 min later
+  merged into the same incident. `energy_alert`/`budget_exhausted` still
+  correlate -- a drain is a real attack on the field network.
+- `GET /events` without `since` now returns the newest `limit` events (it
+  returned the oldest, which would have frozen the timeline under v4 volume).
+
+---
+
 ## 2026-09-18 — v2 energy delta, corrected against `sentinelmesh_frontend_kit.zip`
 
 The entry directly below this one (same day) invented `energy_sample` and a

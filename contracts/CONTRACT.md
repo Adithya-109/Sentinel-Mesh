@@ -1,4 +1,4 @@
-# SentinelMesh integration contract v1 + v2-energy delta (owner: Console/Claude 2. Announce any change to all three.)
+# SentinelMesh integration contract v1 + v2-energy delta + v4 serial/control (owner: Console/Claude 2. Announce any change to all three.)
 
 ## Ports / transport
 - Console API: http://localhost:8000
@@ -31,18 +31,38 @@
 - POST :8001/score/file (multipart file) or {"features": {<54 PE features>}} -> Event
 - GET  :8001/health
 
-**Open, not yet frozen (v4):** a `sentinelmesh_frontend_kit.zip` (React/Vite,
-copied into `console/frontend-kit/`) already assumes `GET /status`,
-`GET /energy` (continuous power samples — NOT events, see above),
-`GET /experiment`, `POST /mode {mode}`, `POST /attack {profile}` and
-`POST /experiment/run`. `mode`/`attack` reach the boards over serial per the
-kit's own comments, so their exact request/response shapes and the new
-serial line(s) they trigger are Claude 2's (+ Claude 3 for the serial side)
-first v4 task, not decided here — see `docs/v4_energy_split.md`.
+**v4 console-local endpoints** (only the console and its frontend read these, so
+their JSON shapes live in `console/frontend-kit/src/types.ts`, not here):
+`GET /status`, `GET /energy?since=`, `GET /experiment`, `POST /mode {mode}`,
+`POST /attack {profile}`, `POST /experiment/run {condition, profile}`, plus
+`POST /energy` (sample ingest from the bridge). Also served under `/api/*` in the
+exact shapes `types.ts` declares. The cross-team part of v4 is the serial lines
+below.
+
+**Timestamps from boards.** ESP32s have no wall clock, so board-originated
+`ts` values are uptime `millis()`. The console replaces any `ts` below 10^12
+(i.e. not an epoch-ms value) with the time it arrived, and keeps the original
+as `details.device_ts` (events) / `device_ts` (samples). Boards do not need to
+sync time -- which is as well, since `firmware/`'s `new_event()` takes the ts as
+`uint32_t`, and epoch ms (~1.8e12) does not fit in 32 bits.
 
 ## Serial lines
 - gateway -> console: `EVT <Event JSON>` | `TRC <Trace JSON>` | `LOG <text>` (ignored)
 - console -> gateway: `LABEL <normal|weak_link|replay|flood|impersonation>` (tags the TRC lines that follow)
+
+v4 additions. Console -> board lines are sent to **every** bridged port; each board
+acts on its own commands and ignores the rest (both current boards already do).
+- monitor -> console: `NRG <EnergySample JSON>` -- one INA219 reading per line,
+  shape in `contracts/energy.schema.json`:
+  `{"ts": <ms>, "power_mw": 512.0, "volts": 3.86, "amps": 0.133, "battery_pct": 78.4}`
+  (`ts` and `battery_pct` optional).
+- console -> gateway: `DEFENSE <none|ratelimit|cookie|gate>` -- which admission
+  defence runs in front of the handshake. (Not `MODE`: the attacker board already
+  uses `MODE` for attack modes.)
+- console -> attacker: the attacker's existing `MODE <...>` commands.
+  `POST /attack {profile}` maps `none`->`MODE OFF`, `loud`->`MODE FLOOD`,
+  `slow_drip`->`MODE SLOW_DRIP` (new), `replay`->`MODE REPLAY`,
+  `impersonate`->`MODE IMPERSONATE`, `weak_link`->`MODE WEAK_LINK`.
 
 ## Trace JSON (one row per detection window, used to train the field model)
 { "ts": 0, "node": "gateway", "label": "normal", "window_ms": 5000, "hs_per_s": 0, "hs_fail": 0,

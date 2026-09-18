@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinelmesh.local/contracts/energy.schema.json",
+  "title": "SentinelMesh EnergySample (NRG line)",
+  "description": "One power reading from the INA219 monitor board, sent as `NRG <json>`. Continuous telemetry, deliberately NOT an Event. The console validates each sample before storing it; GET /energy serves them to the frontend.",
+  "type": "object",
+  "required": ["power_mw", "volts", "amps"],
+  "properties": {
+    "ts": {"type": "integer", "minimum": 0, "description": "epoch ms, or device millis() -- the bridge replaces values below 1e12 with arrival time. Optional: the console stamps arrival time if absent."},
+    "power_mw": {"type": "number", "minimum": 0},
+    "volts": {"type": "number", "minimum": 0},
+    "amps": {"type": "number", "description": "signed: INA219 reports negative current if the shunt is wired backwards, which should be visible, not clipped"},
+    "battery_pct": {"type": ["number", "null"], "minimum": 0, "maximum": 100, "description": "derived from volts by the monitor; optional because the INA219 does not measure it directly"},
+    "node": {"type": "string", "description": "the node being measured; defaults to field-1"},
+    "source": {"type": "string", "enum": ["ina219", "sim"], "description": "`sim` marks console-side simulated samples (tools/mock_rig.py) so the UI can say SIMULATED and nobody quotes those numbers. Hardware omits it."}
+  },
+  "additionalProperties": true
+}

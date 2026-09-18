@@ -1,0 +1,30 @@
+{
+ "ts": 1789000123000,
+ "link": "attack",
+ "crypto_level": 1024,
+ "battery_pct": 78.4,
+ "power_mw": 512.0,
+ "baseline_mw": 84.0,
+ "projected_days": 1.2,
+ "projected_days_idle": 41.0,
+ "mode": "none",
+ "attack_profile": "loud",
+ "budget_j": 12.6,
+ "budget_max_j": 40.0,
+ "nodes": [
+  {
+   "id": "field-1",
+   "state": "tamper",
+   "rssi": -47,
+   "battery_pct": 78.4,
+   "last_seen_ms": 400
+  },
+  {
+   "id": "gateway",
+   "state": "attack",
+   "rssi": -45,
+   "battery_pct": null,
+   "last_seen_ms": 120
+  }
+ ]
+}

@@ -1,17 +1,22 @@
 """Gateway serial bridge: USB serial <-> console API (contracts/CONTRACT.md).
 
 Reads one message per line at 115200 baud:
-    EVT <Event JSON>   -> POST :8000/events
-    TRC <Trace JSON>   -> POST :8000/traces  (appended to a trace file if recording)
-    LOG <text>         -> ignored, echoed with -v
+    EVT <Event JSON>          -> POST :8000/events
+    TRC <Trace JSON>          -> POST :8000/traces  (appended to a trace file if recording)
+    NRG <EnergySample JSON>   -> POST :8000/energy  (v4, INA219 monitor board)
+    LOG <text>                -> ignored, echoed with -v
 
-Writes back:
-    LABEL <normal|weak_link|replay|flood|impersonation>
+Writes back, whenever the console's state changes:
+    LABEL <normal|weak_link|replay|flood|impersonation>    trace-recording label
+    DEFENSE <none|ratelimit|cookie|gate>                   v4, for the gateway
+    MODE <OFF|FLOOD|SLOW_DRIP|REPLAY|IMPERSONATE|...>      v4, the attacker's commands
 
-The bridge holds no state of its own: it polls GET /recording and sends a
-LABEL line whenever `label_version` changes, so the operator sets the label in
-the UI and the gateway hears about it. That keeps one writer on the serial
-port and one owner of the trace files (the API).
+The bridge holds no state of its own: it polls GET /control and sends a line
+whenever that line's *_version changes. Every bridged port gets every line;
+each board acts on its own commands and ignores the rest (both current boards
+already do). So run one bridge per board -- gateway, attacker, monitor -- and
+none of them needs to know which board it is talking to. On start-up each
+bridge pushes the current state once, so a board that rebooted resyncs.
 
 Three input sources, so the demo never depends on hardware being alive:
     --port COM5        a real gateway
@@ -37,10 +42,10 @@ HTTP = requests.Session()
 
 class Stats:
     def __init__(self):
-        self.evt = self.trc = self.log = self.bad = self.rejected = 0
+        self.evt = self.trc = self.nrg = self.log = self.bad = self.rejected = 0
 
     def line(self) -> str:
-        return (f"EVT {self.evt}  TRC {self.trc}  LOG {self.log}  "
+        return (f"EVT {self.evt}  TRC {self.trc}  NRG {self.nrg}  LOG {self.log}  "
                 f"unparseable {self.bad}  rejected {self.rejected}")
 
 
@@ -64,7 +69,7 @@ def handle_line(line: str, console_url: str, stats: Stats, verbose: bool) -> Non
             print(f"  LOG {rest}")
         return
 
-    if kind not in ("EVT", "TRC"):
+    if kind not in ("EVT", "TRC", "NRG"):
         stats.bad += 1
         if verbose:
             print(f"  ? unrecognised line: {line[:80]}", file=sys.stderr)
@@ -86,6 +91,14 @@ def handle_line(line: str, console_url: str, stats: Stats, verbose: bool) -> Non
                   f"{r.json().get('errors')}", file=sys.stderr)
         elif verbose and r is not None:
             print(f"  EVT {payload.get('type')} -> {r.status_code}")
+    elif kind == "NRG":
+        stats.nrg += 1
+        r = post(console_url, "/energy", payload)
+        if r is not None and r.status_code == 422:
+            stats.rejected += 1
+            print(f"  ! NRG sample rejected: {r.json().get('detail')}", file=sys.stderr)
+        elif verbose and r is not None and stats.nrg % 10 == 1:   # 1 Hz: don't flood the log
+            print(f"  NRG {payload.get('power_mw')} mW -> {r.status_code}")
     else:
         stats.trc += 1
         r = post(console_url, "/traces", payload)
@@ -97,20 +110,27 @@ def handle_line(line: str, console_url: str, stats: Stats, verbose: bool) -> Non
             print(f"  TRC stored={body.get('stored')} label={body.get('label')}")
 
 
-def poll_label(console_url: str, state: dict, write) -> None:
-    """Send `LABEL <x>` when the UI changes the recording label."""
+# (version field, line field) pairs from GET /control
+CONTROL_LINES = [("label_version", "label_line"),
+                 ("mode_version", "defense_line"),
+                 ("attack_version", "attack_line")]
+
+
+def poll_control(console_url: str, state: dict, write) -> None:
+    """Send each control line whose version changed since the last poll."""
     try:
-        r = HTTP.get(f"{console_url}/recording", timeout=2)
-        rec = r.json()
+        c = HTTP.get(f"{console_url}/control", timeout=2).json()
     except (requests.RequestException, ValueError):
         return
-    version = rec.get("label_version")
-    if version != state.get("label_version"):
-        state["label_version"] = version
-        label = rec.get("label", "normal")
+    for version_key, line_key in CONTROL_LINES:
+        version = c.get(version_key)
+        if version is None or version == state.get(version_key):
+            continue
+        state[version_key] = version
+        line = c[line_key]
         if write is not None:
-            write(f"LABEL {label}\n")
-        print(f"  -> LABEL {label}")
+            write(line + "\n")
+        print(f"  -> {line}")
 
 
 def run_serial(args, stats: Stats) -> None:
@@ -131,7 +151,7 @@ def run_serial(args, stats: Stats) -> None:
             now = time.monotonic()
             if now - last_poll >= args.label_poll:
                 last_poll = now
-                poll_label(args.console, state, write)
+                poll_control(args.console, state, write)
 
 
 def run_stream(lines, args, stats: Stats, paced: bool) -> None:
@@ -154,7 +174,7 @@ def run_stream(lines, args, stats: Stats, paced: bool) -> None:
         now = time.monotonic()
         if now - last_poll >= args.label_poll:
             last_poll = now
-            poll_label(args.console, state, None)
+            poll_control(args.console, state, None)
 
 
 def main():
@@ -166,7 +186,8 @@ def main():
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--console", default=DEFAULT_CONSOLE)
     ap.add_argument("--speed", type=float, default=1.0, help="replay speed multiplier")
-    ap.add_argument("--label-poll", type=float, default=2.0, help="seconds between /recording polls")
+    ap.add_argument("--label-poll", type=float, default=1.0,
+                    help="seconds between GET /control polls (the kit expects ~1 s)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
