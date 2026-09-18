@@ -49,12 +49,22 @@ constexpr float BATTERY_EMPTY_V = 3.3f;
 
 // v4 energy rig (docs/v4_energy_split.md): GPIO marker line between the
 // board under test (src/benchmark or the field node) and the Monitor
-// board's INA219 rig (src/monitor). The board under test raises this pin
-// for the duration of each measured operation; the Monitor board watches
-// it as an input and attributes INA219 samples in between to that
+// board's current-sense rig (src/monitor). The board under test raises this
+// pin for the duration of each measured operation; the Monitor board
+// watches it as an input and attributes samples in between to that
 // operation. Same GPIO number on both boards, joined by a single jumper.
 constexpr int PIN_ENERGY_MARKER = 4;
-constexpr uint8_t INA219_I2C_ADDR = 0x40; // Adafruit INA219 default address
+
+// Monitor board uses an ADS1115 precision ADC -- swapped in for the INA219
+// this file originally assumed, because that's what the team had on hand.
+// Unlike INA219, the ADS1115 has no built-in shunt amplifier and its inputs
+// can't safely exceed its own 3.3V supply -- so the shunt resistor sits
+// low-side (in the battery's return/GND leg, not the positive lead) to keep
+// both differential input pins near 0V regardless of battery voltage. See
+// src/monitor/main.cpp for the read path and docs/hardware_setup.md for the
+// physical wiring this implies.
+constexpr uint8_t ADS1115_I2C_ADDR = 0x48;      // default with the breakout's ADDR pin tied to GND
+constexpr float SHUNT_RESISTANCE_OHMS = 0.1f;   // low-side shunt -- update if the one on hand differs
 
 // Serial link to console (gateway only): USB serial, 115200 8N1, one
 // message (EVT/TRC/LOG in, LABEL out) per line, per contract.
