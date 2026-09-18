@@ -1,0 +1,54 @@
+{
+ "profiles": [
+  "loud",
+  "slow_drip"
+ ],
+ "rows": [
+  {
+   "condition": "no_attack",
+   "label": "No attack (baseline)",
+   "energy_j_per_hour": 302.4,
+   "projected_days": 41.0,
+   "legit_connect_pct": 100.0,
+   "legit_extra_delay_ms": 0,
+   "status": "done"
+  },
+  {
+   "condition": "undefended",
+   "label": "Attack, no defence",
+   "energy_j_per_hour": 1843.0,
+   "projected_days": 1.2,
+   "legit_connect_pct": 61.0,
+   "legit_extra_delay_ms": 2400,
+   "status": "done"
+  },
+  {
+   "condition": "ratelimit",
+   "label": "Attack + rate limit",
+   "energy_j_per_hour": 470.0,
+   "projected_days": 26.0,
+   "legit_connect_pct": 92.0,
+   "legit_extra_delay_ms": 300,
+   "status": "done"
+  },
+  {
+   "condition": "cookie",
+   "label": "Attack + cookie only",
+   "energy_j_per_hour": 388.0,
+   "projected_days": 32.0,
+   "legit_connect_pct": 97.0,
+   "legit_extra_delay_ms": 120,
+   "status": "running"
+  },
+  {
+   "condition": "gate",
+   "label": "Attack + EnergyGate",
+   "energy_j_per_hour": null,
+   "projected_days": null,
+   "legit_connect_pct": null,
+   "legit_extra_delay_ms": null,
+   "status": "pending"
+  }
+ ],
+ "note": "FIXTURE NUMBERS — placeholders until the rig measures the real ones."
+}

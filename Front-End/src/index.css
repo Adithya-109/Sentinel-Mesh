@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Figtree:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --bg-1: #394508;
+  --bg-2: #ffffff;
+  --bg-3: #ededed;
+  --accent-1: #d2fd9c;
+  --accent-2: #77912a;
+  --accent-3: #619111;
+  --text-head: #394508;
+  --text-p1: #000000;
+  --text-p2: #5d5d5d;
+  --text-sub: #cbcbcb;
+  --text-over: #d9d9d9;
+  --divider: #e9e9e9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+}
+
+@keyframes orbit3D {
+  0% {
+    transform: rotateX(65deg) rotateZ(0deg);
+  }
+  100% {
+    transform: rotateX(65deg) rotateZ(360deg);
+  }
+}
+
+@keyframes orbit3DReverse {
+  0% {
+    transform: rotateX(-50deg) rotateY(30deg) rotateZ(360deg);
+  }
+  100% {
+    transform: rotateX(-50deg) rotateY(30deg) rotateZ(0deg);
+  }
+}
+
+@keyframes float3D {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+

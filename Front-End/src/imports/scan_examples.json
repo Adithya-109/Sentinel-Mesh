@@ -1,0 +1,44 @@
+{
+ "email": [
+  {
+   "id": "evt-0012",
+   "ts": 1789000000000,
+   "layer": "mail",
+   "type": "email_malicious",
+   "severity": "high",
+   "score": 0.96,
+   "node": null,
+   "technique": "T1566.001",
+   "summary": "Pasted email classified malicious",
+   "reasons": [
+    "'verify your account within 24 hours'",
+    "link domain differs from displayed text",
+    "payment redirect phrasing"
+   ],
+   "details": {
+    "text_len": 1840
+   }
+  }
+ ],
+ "file": [
+  {
+   "id": "evt-0013",
+   "ts": 1789000000000,
+   "layer": "file",
+   "type": "file_clean",
+   "severity": "info",
+   "score": 0.03,
+   "node": null,
+   "technique": null,
+   "summary": "7z.exe classified clean",
+   "reasons": [
+    "signed version resource present",
+    "normal section entropy",
+    "imports typical of a desktop tool"
+   ],
+   "details": {
+    "filename": "7z.exe"
+   }
+  }
+ ]
+}

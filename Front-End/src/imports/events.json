@@ -1,0 +1,207 @@
+[
+ {
+  "id": "evt-0001",
+  "ts": 1789000000000,
+  "layer": "mail",
+  "type": "email_malicious",
+  "severity": "high",
+  "score": 0.97,
+  "node": null,
+  "technique": "T1566.001",
+  "summary": "Phishing email from billing@grid-invoices.co",
+  "reasons": [
+   "urgent payment language",
+   "link text does not match target",
+   "sender domain registered 3 days ago"
+  ],
+  "details": {
+   "message_id": "m-77",
+   "subject": "URGENT: substation invoice overdue",
+   "attachment": "invoice_2026.exe"
+  }
+ },
+ {
+  "id": "evt-0002",
+  "ts": 1789000009000,
+  "layer": "file",
+  "type": "file_malicious",
+  "severity": "high",
+  "score": 0.99,
+  "node": null,
+  "technique": "T1204.002",
+  "summary": "Attachment invoice_2026.exe classified malicious",
+  "reasons": [
+   "unusual load address",
+   "high section entropy (packed)",
+   "very few imported libraries"
+  ],
+  "details": {
+   "message_id": "m-77",
+   "filename": "invoice_2026.exe",
+   "sha256": "a3f1\u2026"
+  }
+ },
+ {
+  "id": "evt-0003",
+  "ts": 1789000020000,
+  "layer": "field",
+  "type": "rekey",
+  "severity": "info",
+  "score": null,
+  "node": "field-1",
+  "technique": null,
+  "summary": "Re-keyed at ML-KEM-1024 (battery 91%)",
+  "reasons": [
+   "battery healthy",
+   "link strong"
+  ],
+  "details": {
+   "level": 1024,
+   "reason": "scheduled"
+  }
+ },
+ {
+  "id": "evt-0004",
+  "ts": 1789000046000,
+  "layer": "field",
+  "type": "replay_rejected",
+  "severity": "medium",
+  "score": null,
+  "node": "gateway",
+  "technique": "T1692.002",
+  "summary": "Replayed reading rejected (seq 0142 already seen)",
+  "reasons": [
+   "sequence number already used",
+   "strong signal, so not a retry"
+  ],
+  "details": {
+   "seq": 142
+  }
+ },
+ {
+  "id": "evt-0005",
+  "ts": 1789000052000,
+  "layer": "field",
+  "type": "gate_decision",
+  "severity": "low",
+  "score": 0.21,
+  "node": "gateway",
+  "technique": null,
+  "summary": "EnergyGate: CHALLENGE sent to unknown sender",
+  "reasons": [
+   "no completed handshake before",
+   "3 attempts in 4 s"
+  ],
+  "details": {
+   "action": "challenge",
+   "sender": "unknown-7f"
+  }
+ },
+ {
+  "id": "evt-0006",
+  "ts": 1789000058000,
+  "layer": "field",
+  "type": "gate_decision",
+  "severity": "medium",
+  "score": 0.06,
+  "node": "gateway",
+  "technique": null,
+  "summary": "EnergyGate: DROP (cookie never returned)",
+  "reasons": [
+   "cookie not echoed",
+   "fragments never complete"
+  ],
+  "details": {
+   "action": "drop",
+   "sender": "unknown-7f"
+  }
+ },
+ {
+  "id": "evt-0007",
+  "ts": 1789000061000,
+  "layer": "field",
+  "type": "attack_detected",
+  "severity": "high",
+  "score": 0.94,
+  "node": "gateway",
+  "technique": "T1692.002",
+  "summary": "Replay campaign from unknown-7f, sender locked out",
+  "reasons": [
+   "12 replays in 30 s",
+   "signal strong and steady",
+   "no packet loss"
+  ],
+  "details": {
+   "kind": "replay_campaign"
+  }
+ },
+ {
+  "id": "evt-0008",
+  "ts": 1789000074000,
+  "layer": "field",
+  "type": "energy_alert",
+  "severity": "high",
+  "score": null,
+  "node": "field-1",
+  "technique": null,
+  "summary": "Battery draw 6.1\u00d7 baseline",
+  "reasons": [
+   "handshake requests 40\u00d7 normal rate"
+  ],
+  "details": {
+   "draw_mw": 512.0,
+   "baseline_mw": 84.0
+  }
+ },
+ {
+  "id": "evt-0009",
+  "ts": 1789000096000,
+  "layer": "field",
+  "type": "handshake_rejected",
+  "severity": "high",
+  "score": null,
+  "node": "gateway",
+  "technique": "T0830",
+  "summary": "Impostor claiming to be field-1 rejected",
+  "reasons": [
+   "signature does not match provisioned key"
+  ],
+  "details": {
+   "sender": "field-1(spoofed)"
+  }
+ },
+ {
+  "id": "evt-0010",
+  "ts": 1789000120000,
+  "layer": "tamper",
+  "type": "case_opened",
+  "severity": "critical",
+  "score": null,
+  "node": "field-1",
+  "technique": null,
+  "summary": "Enclosure opened: session keys wiped",
+  "reasons": [
+   "light level jumped 12 \u2192 640",
+   "movement detected 0.4 s later"
+  ],
+  "details": {}
+ },
+ {
+  "id": "evt-0011",
+  "ts": 1789000123000,
+  "layer": "field",
+  "type": "rekey",
+  "severity": "info",
+  "score": null,
+  "node": "field-1",
+  "technique": null,
+  "summary": "Fresh handshake completed after tamper",
+  "reasons": [
+   "recovered automatically"
+  ],
+  "details": {
+   "level": 1024,
+   "reason": "post_tamper"
+  }
+ }
+]
