@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# runtime state: recreated by running the console
+data/console.db
+data/console.db-wal
+data/console.db-shm
+
+# recorded traces are data, not source. The handoff to the ML stream is a
+# copy into ml/data/traces/ -- see demo/RUNBOOK.md.
+data/traces/*.jsonl
