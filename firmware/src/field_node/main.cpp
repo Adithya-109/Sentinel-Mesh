@@ -49,7 +49,6 @@
 
 #include "sentinel_proto/packet.h"
 #include "sentinel_proto/fragment.h"
-#include "sentinel_proto/replay.h"
 #include "sentinel_proto/trace.h"
 #include "sentinel_proto/cookie.h"
 #include "sentinel_proto/energy_budget.h"
@@ -117,7 +116,7 @@ constexpr uint32_t LINK_WINDOW_MS = 5000;
 // Per-sender: when did it last try (RATELIMIT mode). 0 = never.
 static uint32_t g_last_attempt_ms[256] = {0};
 
-static ReplayFilter g_replay; // for CONTROL messages from the gateway
+static ControlSequencer g_control_seq; // orders CONTROL messages from the gateway
 
 static void send_to_gateway(MsgType type, const uint8_t* payload, size_t len);
 
@@ -377,17 +376,17 @@ static void on_mesh_packet(const PacketHeader& hdr, const uint8_t* payload, size
     }
 
     g_link.total_received++;
-    ReplayFilter::Result rr = g_replay.check(hdr.sender, hdr.seq, hdr.time_ms, now_ms);
-    if (rr == ReplayFilter::Result::DUPLICATE) {
-        g_link.duplicate_count++;
-        return;
-    }
-    if (rr != ReplayFilter::Result::ACCEPT) return;
 
     // CONTROL is only accepted from the gateway (TODO: and only once the
-    // AEAD layer authenticates it -- until then this is structural).
+    // AEAD layer authenticates it -- until then this is structural). Ordered
+    // by ControlSequencer, not ReplayFilter -- see gate_msgs.h for why the
+    // replay filter's clock-based freshness check can't work across boards.
     if (hdr.type == MsgType::CONTROL && hdr.sender == static_cast<uint8_t>(NodeId::GATEWAY)) {
-        on_control(payload, payload_len);
+        if (g_control_seq.accept(hdr.epoch, hdr.seq)) {
+            on_control(payload, payload_len);
+        } else {
+            g_link.duplicate_count++;
+        }
     }
 }
 

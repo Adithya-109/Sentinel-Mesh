@@ -62,4 +62,34 @@ size_t serialize_control(const ControlMsg& m, uint8_t* out, size_t out_len);
 // False on a short buffer, an unknown kind, or (for DEFENSE) an unknown mode.
 bool deserialize_control(const uint8_t* in, size_t in_len, ControlMsg& out);
 
+// Ordering check for CONTROL on field-1. Not ReplayFilter: its freshness test
+// compares the sender's millis() with the receiver's, and the gateway's and
+// field-1's uptimes never match until a handshake establishes a shared session
+// clock -- so every CONTROL would be rejected as stale and the console's
+// DEFENSE switch would silently do nothing. Instead: the gateway stamps a
+// random per-boot epoch and a counter; accept a new epoch (the gateway
+// rebooted) or a higher seq within the current one, reject anything else.
+// Anti-replay across epochs needs the AEAD session layer (TODO, like all
+// traffic); a stale mode would also be overwritten by the gateway's periodic
+// re-send within CONTROL_RESEND_MS.
+class ControlSequencer {
+public:
+    bool accept(uint16_t epoch, uint32_t seq) {
+        if (!seen_ || epoch != epoch_) {
+            seen_ = true;
+            epoch_ = epoch;
+            seq_ = seq;
+            return true;
+        }
+        if (seq <= seq_) return false;
+        seq_ = seq;
+        return true;
+    }
+
+private:
+    bool seen_ = false;
+    uint16_t epoch_ = 0;
+    uint32_t seq_ = 0;
+};
+
 } // namespace sentinel

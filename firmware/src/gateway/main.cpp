@@ -67,6 +67,7 @@ static DefenseMode g_defense = DefenseMode::NONE;
 constexpr uint32_t CONTROL_RESEND_MS = 30000;
 static uint32_t g_last_control_ms = 0;
 static uint32_t g_ctrl_seq = 0;
+static uint16_t g_ctrl_epoch = 0; // random per boot (setup()), see ControlSequencer
 
 // Current LABEL from the console (set via `LABEL <x>` serial command),
 // tags the TRC lines that follow it until changed again. "normal" until
@@ -243,6 +244,7 @@ static void send_control_to_field_node(uint32_t now_ms) {
     PacketHeader hdr;
     hdr.type = MsgType::CONTROL;
     hdr.sender = static_cast<uint8_t>(NodeId::GATEWAY);
+    hdr.epoch = g_ctrl_epoch;
     hdr.seq = g_ctrl_seq++;
     hdr.time_ms = now_ms;
     auto frags = Fragmenter::split(hdr, payload, sizeof(payload));
@@ -416,6 +418,7 @@ void setup() {
     g_window.reset();
     g_window.window_ms = WINDOW_MS;
     g_window_start_ms = millis();
+    g_ctrl_epoch = static_cast<uint16_t>(esp_random());
 
     Serial.println("LOG gateway boot complete");
 

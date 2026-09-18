@@ -715,6 +715,16 @@ static void test_gate_report_rejects_corruption() {
     CHECK(!deserialize_gate_report(bad_flags, sizeof(bad_flags), back));
     CHECK(serialize_gate_report(r, buf, GATE_REPORT_LEN - 1) == 0);
 }
+static void test_control_sequencer_orders_without_a_shared_clock() {
+    ControlSequencer q;
+    CHECK(q.accept(7, 0));    // first message ever
+    CHECK(q.accept(7, 1));    // newer
+    CHECK(!q.accept(7, 1));   // duplicate
+    CHECK(!q.accept(7, 0));   // older (a replay within the epoch)
+    CHECK(q.accept(9, 0));    // gateway rebooted: new epoch restarts the count
+    CHECK(q.accept(9, 5));
+    CHECK(!q.accept(9, 4));
+}
 static void test_control_round_trip_and_rejects_bad_mode() {
     ControlMsg m;
     m.kind = ControlKind::DEFENSE;
@@ -805,6 +815,7 @@ int main() {
     RUN(test_gate_report_is_big_endian);
     RUN(test_gate_report_rejects_corruption);
     RUN(test_control_round_trip_and_rejects_bad_mode);
+    RUN(test_control_sequencer_orders_without_a_shared_clock);
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

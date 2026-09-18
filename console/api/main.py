@@ -297,9 +297,23 @@ async def _json_body(request: Request) -> dict[str, Any]:
 if os.path.isdir(config.WEB_DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(config.WEB_DIST, "assets")), name="web-assets")
 
+    _WEB_ROOT = os.path.realpath(config.WEB_DIST)
+
     @app.get("/{full_path:path}")
     async def spa(full_path: str):
-        candidate = os.path.join(config.WEB_DIST, full_path)
-        if full_path and os.path.isfile(candidate):
+        # An unknown API path is a real 404, not the app's HTML with a 200 --
+        # otherwise a typo'd fetch fails later as a confusing JSON parse error.
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(404, "Not Found")
+        # Resolve and confine to web/dist. `full_path` arrives URL-decoded, so
+        # "..%2F..%2Fapi%2Fmain.py" becomes "../../api/main.py"; joining it
+        # unchecked served any file the process could read (source, console.db,
+        # recorded traces).
+        candidate = os.path.realpath(os.path.join(_WEB_ROOT, full_path))
+        try:
+            inside = os.path.commonpath([candidate, _WEB_ROOT]) == _WEB_ROOT
+        except ValueError:  # different drive on Windows, e.g. "/D:/x"
+            inside = False
+        if full_path and inside and os.path.isfile(candidate):
             return FileResponse(candidate)
-        return FileResponse(os.path.join(config.WEB_DIST, "index.html"))
+        return FileResponse(os.path.join(_WEB_ROOT, "index.html"))
