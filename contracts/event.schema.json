@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinelmesh.local/contracts/event.schema.json",
+  "title": "SentinelMesh Event",
+  "description": "The single event shape every SentinelMesh layer emits. Derived from contracts/CONTRACT.md v1; the prose contract is normative, this file is its machine-checkable form.",
+  "type": "object",
+  "required": ["id", "ts", "layer", "type", "severity", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "uuid4 from the emitting layer. Re-POSTing the same id is idempotent."
+    },
+    "ts": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "epoch milliseconds"
+    },
+    "layer": {
+      "type": "string",
+      "enum": ["mail", "file", "field", "tamper"]
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "email_malicious", "email_clean",
+        "file_malicious", "file_clean",
+        "replay_rejected", "handshake_rejected", "attack_detected",
+        "link_degraded", "rekey",
+        "case_opened", "moved", "voltage_anomaly"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["info", "low", "medium", "high", "critical"]
+    },
+    "score": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "node": {
+      "type": ["string", "null"],
+      "enum": ["field-1", "gateway", "attacker", null]
+    },
+    "technique": {
+      "type": ["string", "null"],
+      "description": "MITRE ATT&CK technique id, or null"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "one line for the timeline"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "top 3 reasons behind the verdict; drives the console's Why panel"
+    },
+    "details": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "layer <-> type consistency (CONTRACT.md's event table)",
+      "if": {"properties": {"layer": {"const": "mail"}}, "required": ["layer"]},
+      "then": {"properties": {"type": {"enum": ["email_malicious", "email_clean"]}}}
+    },
+    {
+      "if": {"properties": {"layer": {"const": "file"}}, "required": ["layer"]},
+      "then": {"properties": {"type": {"enum": ["file_malicious", "file_clean"]}}}
+    },
+    {
+      "if": {"properties": {"layer": {"const": "field"}}, "required": ["layer"]},
+      "then": {
+        "properties": {
+          "type": {
+            "enum": ["replay_rejected", "handshake_rejected", "attack_detected", "link_degraded", "rekey"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"layer": {"const": "tamper"}}, "required": ["layer"]},
+      "then": {"properties": {"type": {"enum": ["case_opened", "moved", "voltage_anomaly"]}}}
+    },
+    {
+      "$comment": "attack_detected must say which attack it was",
+      "if": {"properties": {"type": {"const": "attack_detected"}}, "required": ["type"]},
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {"enum": ["replay_campaign", "handshake_flood", "impersonation"]}
+            }
+          }
+        },
+        "required": ["details"]
+      }
+    },
+    {
+      "$comment": "rekey carries the ML-KEM level it moved to, and why",
+      "if": {"properties": {"type": {"const": "rekey"}}, "required": ["type"]},
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object",
+            "required": ["level", "reason"],
+            "properties": {
+              "level": {"enum": [512, 768, 1024]},
+              "reason": {"type": "string"}
+            }
+          }
+        },
+        "required": ["details"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinelmesh.local/contracts/trace.schema.json",
+  "title": "SentinelMesh Trace row",
+  "description": "One detection window from the gateway, used to train the FieldGuard on-device model. Derived from contracts/CONTRACT.md v1. Every feature is required: a missing field would silently become a zero in training, so the console drops rows that do not validate rather than poisoning the dataset.",
+  "type": "object",
+  "required": [
+    "ts", "node", "label", "window_ms", "hs_per_s", "hs_fail", "replay_rej",
+    "auth_fail", "stale", "frag_timeout", "rssi_mean", "rssi_var", "loss_pct", "jitter_ms"
+  ],
+  "properties": {
+    "ts": {"type": "integer", "minimum": 0, "description": "session-relative or epoch ms"},
+    "node": {"type": "string", "enum": ["field-1", "gateway", "attacker"]},
+    "label": {
+      "type": "string",
+      "enum": ["normal", "weak_link", "replay", "flood", "impersonation"],
+      "description": "set by the console's LABEL command; the ground truth for training"
+    },
+    "window_ms": {"type": "integer", "exclusiveMinimum": 0},
+    "hs_per_s": {"type": "number", "minimum": 0, "description": "handshakes started per second"},
+    "hs_fail": {"type": "integer", "minimum": 0, "description": "handshakes that failed signature/level checks"},
+    "replay_rej": {"type": "integer", "minimum": 0, "description": "packets rejected by the sliding replay window"},
+    "auth_fail": {"type": "integer", "minimum": 0, "description": "AES-GCM tag failures"},
+    "stale": {"type": "integer", "minimum": 0, "description": "packets outside the freshness threshold"},
+    "frag_timeout": {"type": "integer", "minimum": 0, "description": "reassembly timeouts"},
+    "rssi_mean": {"type": "number", "maximum": 0},
+    "rssi_var": {"type": "number", "minimum": 0},
+    "loss_pct": {"type": "number", "minimum": 0, "maximum": 100},
+    "jitter_ms": {"type": "number", "minimum": 0}
+  },
+  "additionalProperties": true,
+  "$comment": "additionalProperties is open so the console can stamp provenance (session, gw_label) without breaking firmware-side producers. sentinel_ml/field_model.py selects columns by name, so extra keys are ignored downstream."
+}

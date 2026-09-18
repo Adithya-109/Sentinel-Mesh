@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic
+jsonschema
+pyserial
+streamlit
+requests
+pandas
+pytest
+httpx
