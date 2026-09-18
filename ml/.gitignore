@@ -12,6 +12,7 @@ benign/extracted/
 benign/*.log
 benign/pkg_list.txt
 build_all.log
+retrain_fileguard.log
 service.log
 data/security/
 data/traces/*.jsonl

@@ -42,17 +42,32 @@ def main():
     ap.add_argument("--benign-features", default=os.path.join(HERE, "benign", "features", "thirdparty_features.csv"))
     ap.add_argument("--max-email-false-alarm", type=float, default=0.02)
     ap.add_argument("--max-file-false-alarm", type=float, default=0.001)
+    ap.add_argument("--only", choices=["all", "mailguard", "fileguard"], default="all",
+                     help="retrain just one model; the other's metrics.json section is kept as-is")
     args = ap.parse_args()
 
     os.makedirs(MODELS_DIR, exist_ok=True)
     os.makedirs(REPORTS_DIR, exist_ok=True)
+    metrics_path = os.path.join(REPORTS_DIR, "metrics.json")
     metrics = {}
+    if os.path.exists(metrics_path):
+        with open(metrics_path) as f:
+            metrics = json.load(f)
 
-    print("== training MailGuard ==")
-    vec, model, mail_threshold, mail_metrics = mailguard.train(args.data, max_false_alarm=args.max_email_false_alarm)
-    joblib.dump({"vectorizer": vec, "model": model, "threshold": mail_threshold}, os.path.join(MODELS_DIR, "mailguard.joblib"))
-    metrics["mailguard"] = mail_metrics
-    print(json.dumps(mail_metrics, indent=2, default=str))
+    if args.only in ("all", "mailguard"):
+        print("== training MailGuard ==")
+        vec, model, mail_threshold, mail_metrics = mailguard.train(args.data, max_false_alarm=args.max_email_false_alarm)
+        joblib.dump({"vectorizer": vec, "model": model, "threshold": mail_threshold}, os.path.join(MODELS_DIR, "mailguard.joblib"))
+        metrics["mailguard"] = mail_metrics
+        print(json.dumps(mail_metrics, indent=2, default=str))
+    else:
+        print("== skipping MailGuard (--only fileguard); keeping its existing metrics.json section ==")
+
+    if args.only not in ("all", "fileguard"):
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f, indent=2, default=str)
+        print(f"wrote {metrics_path}")
+        return
 
     print("== training FileGuard ==")
     benign_csv = args.benign_features if os.path.exists(args.benign_features) else None

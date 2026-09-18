@@ -97,28 +97,28 @@
       "MajorOperatingSystemVersion": 0.029,
       "CheckSum": 0.01
     },
-    "thirdparty_benign_files": 370,
-    "thirdparty_packages": 27,
-    "thirdparty_flagged_by_dataset_model": 0.1811,
+    "thirdparty_benign_files": 1566,
+    "thirdparty_packages": 198,
+    "thirdparty_flagged_by_dataset_model": 0.3966,
     "thirdparty_experiment_mean_of_5": {
       "dataset_only": {
         "detection_rate": 0.9965,
         "dataset_false_alarm": 0.0066,
-        "unseen_thirdparty_false_alarm": 0.1494
+        "unseen_thirdparty_false_alarm": 0.4051
       },
       "plus_thirdparty_benign": {
         "detection_rate": 0.9967,
-        "dataset_false_alarm": 0.007,
-        "unseen_thirdparty_false_alarm": 0.0049
+        "dataset_false_alarm": 0.0066,
+        "unseen_thirdparty_false_alarm": 0.0044
       }
     },
     "malware_group_split_final": {
-      "threshold": 0.9568,
-      "acc": 0.9925,
-      "auc": 0.99985,
-      "detection_rate": 0.9897,
+      "threshold": 0.9579,
+      "acc": 0.9923,
+      "auc": 0.99984,
+      "detection_rate": 0.9894,
       "false_alarm": 0.001,
-      "detection_at_0p1pct_false_alarm": 0.9897,
+      "detection_at_0p1pct_false_alarm": 0.9894,
       "thirdparty_false_alarm": 0.0
     }
   },

@@ -13,6 +13,7 @@ from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve
 from sklearn.model_selection import GroupShuffleSplit
 
 from .data import load_malware, malware_feature_columns, malware_groups
+from .reasons import humanize_file_reason
 
 SEED = 42
 THIRDPARTY_SAMPLE_WEIGHT = 20.0
@@ -80,10 +81,7 @@ def explain(model, cols, x_row, top_k=3):
     contrib = model.booster_.predict(x_row.reshape(1, -1), pred_contrib=True)[0]
     contrib = contrib[:-1]  # drop the bias/expected-value term
     order = np.argsort(-np.abs(contrib))[:top_k]
-    out = []
-    for i in order:
-        out.append(f"{cols[i]}={x_row[i]:g} (contrib {contrib[i]:+.3f})")
-    return out
+    return [humanize_file_reason(cols[i], x_row[i], float(contrib[i])) for i in order]
 
 
 def train(security_root: str, thirdparty_features_csv: str = None, max_false_alarm: float = 0.001, seed: int = SEED):

@@ -11,6 +11,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, roc_curve
 from sklearn.model_selection import train_test_split
 
 from .data import EMAIL_CORPORA, load_emails
+from .reasons import humanize_mail_reason
 from .text import normalize_text
 
 SEED = 42
@@ -70,12 +71,7 @@ def explain(vec, model, text, top_k=3):
     contrib = np.asarray(x[0, idx].todense()).ravel() * coef[idx]
     order = np.argsort(-np.abs(contrib))[:top_k]
     fn = vec.get_feature_names_out()
-    out = []
-    for i in order:
-        tok = fn[idx[i]]
-        c = float(contrib[i])
-        out.append(f"'{tok}' -> {'malicious' if c > 0 else 'legit'} signal ({c:+.3f})")
-    return out
+    return [humanize_mail_reason(fn[idx[p]], float(contrib[p])) for p in order]
 
 
 def train(security_root: str, max_false_alarm: float = 0.02, seed: int = SEED):
