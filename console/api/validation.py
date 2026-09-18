@@ -69,3 +69,22 @@ def validate_trace(payload: Any) -> tuple[dict, list[str]]:
     if errors:
         return {}, errors
     return dict(payload), []
+
+
+_energy_validator = None
+
+
+def energy_validator() -> Draft202012Validator:
+    global _energy_validator
+    if _energy_validator is None:
+        _energy_validator = _load(config.ENERGY_SCHEMA_PATH)
+    return _energy_validator
+
+
+def validate_energy(payload: Any) -> tuple[dict, list[str]]:
+    if not isinstance(payload, dict):
+        return {}, ["(root): energy sample must be a JSON object"]
+    errors = _errors(energy_validator(), payload)
+    if errors:
+        return {}, errors
+    return dict(payload), []

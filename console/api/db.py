@@ -42,6 +42,62 @@ CREATE TABLE IF NOT EXISTS recording (
     dropped       INTEGER NOT NULL DEFAULT 0
 );
 INSERT OR IGNORE INTO recording (k) VALUES (1);
+
+-- v4: continuous INA219 samples (NRG lines). Telemetry, not events.
+CREATE TABLE IF NOT EXISTS energy_samples (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts          INTEGER NOT NULL,
+    node        TEXT    NOT NULL,
+    power_mw    REAL    NOT NULL,
+    volts       REAL    NOT NULL,
+    amps        REAL    NOT NULL,
+    battery_pct REAL,
+    source      TEXT    NOT NULL,
+    device_ts   INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_energy_ts ON energy_samples(ts);
+
+-- chart annotations ("attack starts", "EnergyGate on"), added by the controls
+CREATE TABLE IF NOT EXISTS energy_markers (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts    INTEGER NOT NULL,
+    label TEXT    NOT NULL
+);
+
+-- v4: demo controls the bridge relays to the boards (DEFENSE / MODE lines)
+CREATE TABLE IF NOT EXISTS control (
+    k              INTEGER PRIMARY KEY CHECK (k = 1),
+    mode           TEXT    NOT NULL DEFAULT 'none',
+    mode_version   INTEGER NOT NULL DEFAULT 0,
+    attack_profile TEXT    NOT NULL DEFAULT 'none',
+    attack_version INTEGER NOT NULL DEFAULT 0
+);
+INSERT OR IGNORE INTO control (k) VALUES (1);
+
+-- last time each node was heard from, for GET /status's per-node state
+CREATE TABLE IF NOT EXISTS node_seen (
+    node        TEXT PRIMARY KEY,
+    last_ts     INTEGER NOT NULL,
+    rssi        REAL,
+    battery_pct REAL
+);
+
+-- v4: the five-row comparison (brief section 6), one row per profile x condition
+CREATE TABLE IF NOT EXISTS experiment (
+    profile              TEXT    NOT NULL,
+    condition            TEXT    NOT NULL,
+    status               TEXT    NOT NULL,
+    started_ts           INTEGER,
+    ended_ts             INTEGER,
+    duration_s           INTEGER,
+    energy_j_per_hour    REAL,
+    projected_days       REAL,
+    legit_connect_pct    REAL,
+    legit_extra_delay_ms REAL,
+    source               TEXT,
+    samples              INTEGER,
+    PRIMARY KEY (profile, condition)
+);
 """
 
 # Columns added after the first demo DBs were created. SQLite has no
@@ -110,9 +166,19 @@ def insert_event(conn: sqlite3.Connection, event: dict[str, Any]) -> bool:
 
 
 def get_events(conn: sqlite3.Connection, since: Optional[int] = None, limit: int = 1000) -> list[dict]:
-    """Events in timeline order (oldest first). `since` is exclusive."""
+    """Events in timeline order (oldest first). `since` is exclusive.
+
+    Without `since` this is the NEWEST `limit` events, still oldest-first. It
+    used to be the oldest `limit`, which was harmless at v3 volumes but at v4's
+    one-gate-decision-every-few-seconds would freeze the timeline and
+    /incidents on stale history after a long rehearsal. With `since` it pages
+    forward oldest-first, which is what a poller wants.
+    """
     if since is None:
-        rows = conn.execute("SELECT * FROM events ORDER BY ts, received_ts LIMIT ?", (limit,)).fetchall()
+        rows = conn.execute(
+            """SELECT * FROM (SELECT * FROM events ORDER BY ts DESC, received_ts DESC LIMIT ?)
+               ORDER BY ts, received_ts""", (limit,)
+        ).fetchall()
     else:
         rows = conn.execute(
             "SELECT * FROM events WHERE ts > ? ORDER BY ts, received_ts LIMIT ?", (since, limit)
@@ -176,3 +242,44 @@ def count_trace_row(conn: sqlite3.Connection, stored: bool, mismatched: bool = F
     if mismatched:
         conn.execute("UPDATE recording SET mismatched = mismatched + 1 WHERE k = 1")
     conn.commit()
+
+
+# -- v4 control state ------------------------------------------------------
+
+def get_control(conn: sqlite3.Connection) -> dict[str, Any]:
+    c = conn.execute("SELECT * FROM control WHERE k = 1").fetchone()
+    r = get_recording(conn)
+    return {
+        "mode": c["mode"], "mode_version": c["mode_version"],
+        "attack_profile": c["attack_profile"], "attack_version": c["attack_version"],
+        "label": r["label"], "label_version": r["label_version"],
+    }
+
+
+def set_mode(conn: sqlite3.Connection, mode: str) -> None:
+    conn.execute("UPDATE control SET mode = ?, mode_version = mode_version + 1 WHERE k = 1", (mode,))
+    conn.commit()
+
+
+def set_attack(conn: sqlite3.Connection, profile: str) -> None:
+    conn.execute("UPDATE control SET attack_profile = ?, attack_version = attack_version + 1 WHERE k = 1",
+                 (profile,))
+    conn.commit()
+
+
+def touch_node(conn: sqlite3.Connection, node: str, ts: int, rssi: Optional[float] = None,
+               battery_pct: Optional[float] = None) -> None:
+    """Record that `node` was heard from. rssi/battery only overwrite when given."""
+    conn.execute(
+        """INSERT INTO node_seen (node, last_ts, rssi, battery_pct) VALUES (?,?,?,?)
+           ON CONFLICT(node) DO UPDATE SET
+             last_ts = MAX(last_ts, excluded.last_ts),
+             rssi = COALESCE(excluded.rssi, rssi),
+             battery_pct = COALESCE(excluded.battery_pct, battery_pct)""",
+        (node, ts, rssi, battery_pct),
+    )
+    conn.commit()
+
+
+def get_nodes_seen(conn: sqlite3.Connection) -> dict[str, dict]:
+    return {r["node"]: dict(r) for r in conn.execute("SELECT * FROM node_seen")}

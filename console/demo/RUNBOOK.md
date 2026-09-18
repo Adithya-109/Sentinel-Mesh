@@ -3,141 +3,190 @@
 Written for: whoever is driving the laptop during the pitch — follow it
 top to bottom, including someone who did not write the console.
 
-**Target: about 4 minutes.** Every beat has a fallback that does not need
-hardware, and one that does not need the ML service. If something dies, take
-the fallback and keep talking — never debug on stage.
+**Target: about 5 minutes.** Every beat has a fallback that needs no hardware.
+If something dies, take the fallback and keep talking — never debug on stage.
+
+> Beat order follows brief v3 §10, with brief v4's drain → EnergyGate moment
+> inserted after the field-network beat. If brief v4 §8 orders it differently,
+> follow the brief; each beat below stands on its own.
 
 ---
 
-## 0. Before the judges arrive (15 minutes)
+## 0. Before the judges arrive (20 minutes)
 
-Three terminals, all from the repo root. Leave them running.
-
-```bash
-# T1 -- console API
-cd console && .venv/Scripts/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
-
-# T2 -- ML scoring service (the ML stream's; ask them to start it)
-cd ml && .venv/Scripts/python -m uvicorn service:app --host 127.0.0.1 --port 8001
-
-# T3 -- console UI
-cd console && .venv/Scripts/python -m streamlit run ui/app.py
-```
-
-Then the gateway, once boards exist:
-
-```bash
-# T4 -- serial bridge (swap COM5 for the gateway's port)
-cd console && .venv/Scripts/python -m bridge.serial_bridge --port COM5 -v
-```
-
-**Pre-flight checklist — all five must pass:**
+### Once per laptop
 
 ```bash
 cd console
-.venv/Scripts/python -m pytest tests/ -q                      # 46 passed
-curl http://127.0.0.1:8000/health                             # "status":"ok"
-curl http://127.0.0.1:8001/health                             # mailguard_loaded, fileguard_loaded true
-.venv/Scripts/python tools/mock_events.py --dry-run | head -3  # story builds
+py -3.12 -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt
+cd web && npm ci && npm run build        # -> console/web/dist, served by the API at /
 ```
 
-5. Open the UI, confirm the sidebar says **console up**.
-
-**Reset to a clean slate right before you present:**
+### Terminals — all from `console/`, leave them running
 
 ```bash
-curl -X DELETE http://127.0.0.1:8000/events
+# T1 -- console API + the React console at http://127.0.0.1:8000/
+.venv/Scripts/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+
+# T2 -- ML scoring service (the ML stream's; from ml/)
+.venv/Scripts/python -m uvicorn service:app --host 127.0.0.1 --port 8001
+
+# T3.. -- one serial bridge PER BOARD. Every bridge sends every control line to its
+#         board; each board ignores the lines that are not its own.
+.venv/Scripts/python -m bridge.serial_bridge --port COM5 -v      # gateway
+.venv/Scripts/python -m bridge.serial_bridge --port COM6 -v      # attacker
+.venv/Scripts/python -m bridge.serial_bridge --port COM7 -v      # INA219 monitor (NRG lines)
 ```
 
-> Always use `127.0.0.1`, never `localhost`. On Windows `localhost` tries IPv6
-> first and costs ~2 seconds per request — measured on this laptop at 2047 ms
-> vs 2.4 ms. The demo will look broken.
+No boards yet, or a board dies? Replace the bridges with the simulator (see
+"Fallbacks" — and say so out loud):
+
+```bash
+.venv/Scripts/python tools/mock_rig.py          # SIMULATED rig: power, gate decisions, alerts
+```
+
+Open **http://127.0.0.1:8000/** full-screen on the projector.
+(Streamlit fallback UI: `.venv/Scripts/python -m streamlit run ui/app.py`.)
+
+### Pre-flight — all must pass
+
+```bash
+.venv/Scripts/python -m pytest tests/ -q            # all pass
+curl http://127.0.0.1:8000/health                   # "status":"ok"
+curl http://127.0.0.1:8001/health                   # mailguard_loaded, fileguard_loaded true
+curl http://127.0.0.1:8000/control                  # the lines the bridges will send
+```
+
+- The console's header says **console API connected**.
+- Every bridge terminal printed `-> LABEL ...`, `-> DEFENSE ...`, `-> MODE ...`
+  on start-up (it pushes current state so rebooted boards resync).
+- The **Field link** tile shows the gateway and field-1 **not** offline.
+- If a yellow **SIMULATED** banner is showing and the rig *is* connected, a
+  `mock_rig.py` is still running somewhere — stop it.
+
+### Record the experiment table (before the pitch, not during it)
+
+Needs the INA219 rig. In the console's **Energy experiment** card, pick the
+attack profile, set the run length (default 120 s), and click **Run** on each
+row in turn: No attack → Attack, no defence → Rate limit → Cookie → EnergyGate.
+Each run sets the defence and the attack itself and stops the attacker when it
+ends. Then post the firmware's legit-client numbers per row:
+
+```bash
+curl -X POST http://127.0.0.1:8000/experiment/result -H "Content-Type: application/json" \
+  -d '{"condition":"gate","profile":"loud","legit_connect_pct":97,"legit_extra_delay_ms":120}'
+```
+
+The console never fills those two columns itself — it cannot see the legit
+client. Rows recorded from `mock_rig.py` are marked **SIMULATED**: never show
+those as results.
+
+### Reset right before you present
+
+**Reset demo** button (top right of the controls), or `curl -X POST http://127.0.0.1:8000/reset`.
+It clears events, energy samples and markers, and sets the controls back to
+off. It **keeps** the finished experiment rows and the recorded trace files —
+those are evidence (only an in-progress run is dropped). To clear the table on
+purpose: `curl -X DELETE http://127.0.0.1:8000/experiment`.
+
+> Always `127.0.0.1`, never `localhost`: on this laptop `localhost` costs ~2 s
+> per request (IPv6 first). Every default in `console/` already avoids it.
 
 ---
 
-## The five beats
+## The beats
 
-### Beat 1 — Inbox (about 45 s)
+### Beat 1 — Inbox (about 40 s)
 
-**Say:** "Attacks on grids start in someone's inbox. This is a real phishing
-email from a collection the model has never seen."
+**Say:** "Attacks on grids start in someone's inbox. This email comes from a
+collection the model has never seen."
 
-1. UI → **Scan** → *Email* tab → paste a held-out malicious email
-   (`ml/demo/emails/malicious_1.txt`) → **Scan email**.
-2. Point at the verdict and the **top words that drove it** — that is the Why
-   panel, straight from the logistic-regression weights.
-3. Paste the padded version (`malicious_1_padded.txt`): same email with
-   ordinary text stapled on. **Say:** "This is how a spammer evades a filter.
-   The baseline model dropped to 16% on this trick. The model we ship is
-   adversarially trained, so it still catches it."
+1. **Scan** card → paste `ml/demo/emails/malicious_1.txt` → **Scan email**.
+   Point at the verdict and its three reasons, in plain English.
+2. Paste `malicious_1_padded.txt` (same email with ordinary text stapled on).
+   **Say:** "Padding like this dropped the baseline model to 16%. The shipped
+   model is adversarially trained, so it still catches it."
 
-- **Fallback (ML service down):** `python tools/mock_events.py` — beat 3 of the
-  story is the same email verdict, already scored.
+- **Fallback (ML service down):** `python tools/mock_events.py --story classic`
+  — it posts the same verdict, pre-scored.
 
-### Beat 2 — Endpoint (about 45 s)
+### Beat 2 — Endpoint (about 40 s)
 
 **Say:** "The attachment. We never download or run live malware — malicious
-samples are held-out feature rows from the dataset. Only benign files are
-scanned live."
+samples are held-out feature rows. Only benign files are scanned live."
 
-1. Scan page → *File* tab → upload a **real benign** binary
-   (7-Zip, `esbuild.exe`, or `C:\Windows\System32\notepad.exe`) → allowed.
+1. Scan card → choose a **benign** binary (`esbuild.exe`, 7-Zip, or
+   `C:\Windows\System32\notepad.exe`) → **Scan file** → allowed.
 2. **Say:** "The dataset's benign files all come from one Windows install, so
-   the naive model flagged ordinary third-party software as malware. We
-   measured it, added benign third-party binaries, and it dropped to under 1%."
+   the naive model flagged about 40% of ordinary third-party software. We added
+   1,566 benign third-party binaries; under half a percent now."
 
-- **Safety line, say it out loud:** "No live malware at any point."
-- **Fallback:** the mock story's `file_malicious` event carries the same
-  top-3 feature contributions.
+### Beat 3 — Field network (about 40 s)
 
-### Beat 3 — Field network (about 60 s)
+**Say:** "Suppose the attacker gets onto the radio link."
 
-**Say:** "Suppose the attacker gets in anyway. Now they are on the radio link
-to the field sensor."
+1. **Attack → Replay.** `replay_rejected` appears on the timeline.
+2. **Attack → Impersonate.** `handshake_rejected` — **say:** "The handshake is
+   signed with ML-DSA; it cannot forge that, so it's locked out."
+3. **Attack → None.**
 
-1. Attacker ESP32 → replay mode. Gateway rejects it; `replay_rejected` appears
-   on the timeline within a second.
-2. Attacker → impersonate mode. `handshake_rejected` — **say:** "The handshake
-   is signed with ML-DSA. It cannot forge that signature, so it is locked out."
+- **Fallback:** `.venv/Scripts/python -m bridge.serial_bridge --replay demo/serial_log.txt --speed 4 -v`
+  — "recorded from our boards earlier". **Do not claim it is live.**
 
-- **Fallback A (boards dead):** replay the recorded serial log — this is why
-  it exists:
-  ```bash
-  cd console
-  .venv/Scripts/python -m bridge.serial_bridge --replay demo/serial_log.txt --speed 4 -v
-  ```
-  Identical EVT/TRC lines, no hardware. Say "recorded from our boards earlier"
-  — **do not claim it is live.**
-- **Fallback B (bridge dead):** `python tools/mock_events.py`.
+### Beat 4 — The drain (about 45 s) — *brief v4: the battery is the attack surface*
 
-### Beat 4 — Physical (about 30 s)
+**Say:** "Now the attack nobody defends against. Nothing here is forged. The
+attacker just asks the node to do expensive post-quantum handshakes — and the
+battery pays."
+
+1. Defence → **No defence**. Attack → **Loud flood**.
+2. Point at the **Power draw** chart jumping and the **Draw now** tile's
+   "× idle" multiple; the **Projected life** tile falls from weeks to about a day.
+   An `energy_alert` lands on the timeline.
+
+### Beat 5 — EnergyGate (about 45 s) — *the moment that sells the project*
+
+**Say:** "Same attack. Now EnergyGate decides, before any crypto runs, whether
+this sender is worth paying for."
+
+1. Defence → **EnergyGate**. The "EnergyGate on" marker appears on both charts.
+2. Point at the **EnergyGate decisions** feed: unknown sender **CHALLENGE**,
+   then **DROP** when the cookie never comes back, each with its reasons;
+   field-1 still gets **SPEND**. Draw falls back toward idle.
+3. Point at **Battery projection** (from the recorded experiment): the three
+   lines and their flat-battery dates. **Say** which numbers are measured and
+   that the day counts assume the cell's rated capacity.
+4. Attack → **None**.
+
+- **Fallback (rig dead):** run `tools/mock_rig.py` and click the same buttons.
+  The **SIMULATED** banner appears — say "this is the simulator; the measured
+  table is here" and point at the experiment card. **Never** present simulated
+  numbers as results.
+- **Fallback (no clicking possible):** `python tools/mock_events.py --story drain`.
+
+### Beat 6 — Physical (about 30 s)
 
 **Say:** "Last layer. Someone opens the enclosure."
 
-1. Open the field node's case. `case_opened` arrives as **critical**; the node
-   wipes its session keys, re-handshakes, and comes back green.
-2. Point at the `rekey` event that follows: "It recovered on its own, at a
-   stronger ML-KEM level."
+1. Open the field node's case. **Field link** goes **TAMPER**; keys are wiped,
+   a fresh handshake runs, and a `rekey` event follows.
 
-- **Fallback:** the mock story ends with exactly these two events.
+- **Fallback:** `python tools/mock_events.py --story classic` ends with exactly
+  these two events.
 
-### Beat 5 — The console (about 60 s) — **the point of the whole demo**
+### Beat 7 — One incident (about 45 s) — *the point of the console*
 
-**Say:** "Four alerts from four layers. An operator does not want four alerts.
-They want one story."
+**Say:** "Alerts from four layers. An operator doesn't want four alerts; they
+want one story."
 
-1. UI → **Incidents**. One incident:
-   **"Coordinated attack: inbox → endpoint → field network"**, severity
-   **critical**.
-2. Walk the **attack-chain strip** left to right — Inbox → Endpoint → Field
-   network → Physical, all four lit.
-3. Open **"Why this severity"**: "base high → critical, because more than one
-   layer fired and because mail + file + field together is the Ukraine-2015
-   shape."
-4. Expand the timeline and show the **Why panel** on two or three alerts, with
-   the ATT&CK labels (T1566.001, T1204.002, T0830, T1692.002).
-5. **Close with:** "The correlation is rules, not ML, and we say so — that
-   keeps it explainable. The machine learning is in the detectors."
+1. **Incidents** card: **"Coordinated attack: inbox → endpoint → field
+   network"**, critical. Walk the chain strip: Inbox → Endpoint → Field network
+   → Physical, all **HIT**.
+2. Read the **Why critical** line: "more than one layer fired, and mail + file +
+   field together is the Ukraine-2015 shape."
+3. **Close:** "The correlation is rules, not ML — so we can explain every alert.
+   The machine learning is in the detectors, and EnergyGate is the one deciding
+   what the battery is allowed to spend."
 
 ---
 
@@ -145,37 +194,28 @@ They want one story."
 
 | Question | Answer |
 |---|---|
-| "Is the correlation ML?" | No — rules, ~80 lines, documented in `console/api/correlation.py` with a test per rule. The ML is in the detectors. |
-| "What if two things are unrelated?" | Then they are separate incidents. The window is 10 minutes and configurable; `GET /incidents?window_ms=` shows it live. |
-| "Would a clean email make an incident?" | No. Informational events are recorded on the timeline but never form incidents — rule R1. |
-| "Is this event format real, or per-demo?" | One contract, `contracts/CONTRACT.md`, frozen before any of the three streams started. Every event is validated against `contracts/event.schema.json` on arrival; invalid ones are rejected with 422. |
-| "Did you handle live malware?" | Never. Malicious samples are held-out dataset rows. Only benign files are scanned live. |
+| "Is the correlation ML?" | No — five documented rules in `console/api/correlation.py`, one test each. |
+| "Why aren't EnergyGate decisions in the incident?" | They're telemetry — one per admission decision. Counting them would fake a "coordinated attack" and hold incidents open forever; we measured both. The drain itself (`energy_alert`) does correlate. |
+| "Are those battery numbers real?" | The experiment rows marked measured came from the INA219 rig. The day counts are projections: measured draw against the cell's rated capacity. Anything from the simulator is labelled SIMULATED. |
+| "Is the event format real?" | One contract, frozen before the three streams started; every event is validated on arrival (`contracts/event.schema.json`), invalid ones rejected with a 422. |
+| "Did you handle live malware?" | Never. Malicious samples are held-out dataset rows. |
 
 ---
 
-## Recording traces (not part of the pitch — this is the L3 hand-off)
+## Recording field-model traces (the L3 hand-off, not part of the pitch)
 
-Do this once the boards work, before the field model is trained.
+Streamlit UI → **Trace recording** (the React console does not have this page).
 
-1. Start the bridge against the real gateway (`--port COM5`).
-2. UI → **Trace recording** → name the session → **Start recording**.
-3. For each class in turn — `normal`, `weak_link`, `replay`, `flood`,
-   `impersonation` — click that label, **then** run the matching mode on the
-   attacker node, and leave it for 60–90 seconds.
-4. Watch the **mismatch warning**. If it keeps climbing, the label and the
-   attack disagree and you are recording mislabelled data — stop and fix it
-   before collecting more.
-5. **Stop recording.** Check the session table for a sane spread across labels.
-6. Hand off to the ML stream:
+1. Name the session → **Start recording**.
+2. For each class — `normal`, `weak_link`, `replay`, `flood`, `impersonation` —
+   click the label, **then** start that attack, and leave it 60–90 s.
+3. Watch the **mismatch warning**: if it climbs, the label and the attack
+   disagree — stop and fix it.
+4. **Stop recording**, then hand off:
    ```bash
    cp console/data/traces/*.jsonl ml/data/traces/
    cd ml && make field-model          # -> ml/export/field_model.h
    ```
-   Then the firmware stream picks up `field_model.h`.
-
-Rows are validated against `contracts/trace.schema.json` before they are
-written — a malformed row is dropped and counted, never silently turned into
-zeros in someone's training set.
 
 ---
 
@@ -183,10 +223,11 @@ zeros in someone's training set.
 
 | Symptom | Do this |
 |---|---|
-| Console UI says "console API down" | Restart T1. Events already stored survive — SQLite on disk. |
-| Timeline empty | `python tools/mock_events.py --clear` |
-| Everything looks stale | Sidebar → **Refresh now**, or tick **Auto-refresh (3s)** |
-| Scan page errors | ML service is down; skip to the mock story, do not debug |
-| Gateway silent | `--replay demo/serial_log.txt`, and say it is a recording |
-| Events rejected 422 | A stream changed its event shape. `curl` the error — it names the offending field. Use the mock story and fix after. |
-| Total collapse | Play the backup video. Record it by hour 24. |
+| Header says "console API unreachable" | Restart T1. Stored events survive (SQLite on disk). |
+| Page is blank at http://127.0.0.1:8000/ | `web/dist` missing: `cd web && npm run build`, restart T1. Or use Streamlit. |
+| Button pressed, board didn't react | Check that board's bridge printed `-> DEFENSE` / `-> MODE`. If not, restart that bridge. |
+| Tiles show "—" | No data yet — that's honest, not a bug. Start the rig or `mock_rig.py`. |
+| SIMULATED banner when it shouldn't be | A `mock_rig.py` is still running. Stop it, **Reset demo**. |
+| Events rejected 422 | A stream changed its event shape; the bridge log names the field. Use the mock story, fix after. |
+| Gateway silent | `--replay demo/serial_log.txt`, and say it is a recording. |
+| Total collapse | Play the backup video. |

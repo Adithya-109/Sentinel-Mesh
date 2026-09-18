@@ -1,0 +1,40 @@
+[
+ {
+  "id": "inc-001",
+  "title": "Coordinated attack on field-1",
+  "severity": "critical",
+  "started_ts": 1789000000000,
+  "last_ts": 1789000123000,
+  "layers": [
+   "mail",
+   "file",
+   "field",
+   "tamper"
+  ],
+  "stages": {
+   "inbox": "hit",
+   "endpoint": "hit",
+   "field": "hit",
+   "physical": "hit"
+  },
+  "event_ids": [
+   "evt-0001",
+   "evt-0002",
+   "evt-0003",
+   "evt-0004",
+   "evt-0005",
+   "evt-0006",
+   "evt-0007",
+   "evt-0008",
+   "evt-0009",
+   "evt-0010",
+   "evt-0011"
+  ],
+  "techniques": [
+   "T1566.001",
+   "T1204.002",
+   "T1692.002",
+   "T0830"
+  ]
+ }
+]

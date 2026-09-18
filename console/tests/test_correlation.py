@@ -142,3 +142,36 @@ def test_custom_window_is_honoured():
     events = [ev(0, "mail", "email_malicious", "high"), ev(3, "file", "file_malicious", "high")]
     assert len(build_incidents(events, window_ms=2 * MIN)) == 2
     assert len(build_incidents(events, window_ms=5 * MIN)) == 1
+
+
+# -- R1 (v4): gate_decision is telemetry ------------------------------------
+
+def test_gate_decisions_never_form_an_incident():
+    events = [ev(k, "field", "gate_decision", "medium", details={"action": "drop"}) for k in range(5)]
+    assert build_incidents(events) == []
+
+
+def test_gate_decisions_do_not_fake_a_coordinated_attack():
+    """mail + file + routine gate decisions is NOT the Ukraine-2015 shape."""
+    events = [ev(0, "mail", "email_malicious", "high"), ev(1, "file", "file_malicious", "high")]
+    events += [ev(2 + k, "field", "gate_decision", "low", details={"action": "challenge"}) for k in range(3)]
+    inc = build_incidents(events)[0]
+    assert inc["coordinated"] is False
+    assert inc["layers"] == ["mail", "file"]
+
+
+def test_a_stream_of_gate_decisions_does_not_hold_the_window_open():
+    """A drain attack emits a decision every couple of minutes for as long as
+    it runs; that must not merge an unrelated tamper 40 minutes later."""
+    events = [ev(0, "mail", "email_malicious", "high")]
+    events += [ev(3 + 2 * k, "field", "gate_decision", "medium", details={"action": "drop"})
+               for k in range(15)]
+    events.append(ev(40, "tamper", "case_opened", "critical"))
+    assert len(build_incidents(events)) == 2
+
+
+def test_energy_alerts_still_correlate():
+    """A battery drain is a real field-network attack, unlike the gate feed."""
+    events = [ev(0, "mail", "email_malicious", "high"), ev(1, "file", "file_malicious", "high"),
+              ev(2, "field", "energy_alert", "high", details={"draw_mw": 512, "baseline_mw": 84})]
+    assert build_incidents(events)[0]["coordinated"] is True

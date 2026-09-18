@@ -123,16 +123,45 @@ def test_missing_summary_is_rejected():
 
 # -- GET /events -----------------------------------------------------------
 
+T0 = 1_789_000_000_000   # epoch ms; values below 1e12 are device uptime (see below)
+
+
 def test_since_is_exclusive_and_filters():
-    client.post("/events", json=event(id="a", ts=1000))
-    client.post("/events", json=event(id="b", ts=2000))
-    got = client.get("/events", params={"since": 1000}).json()["events"]
+    client.post("/events", json=event(id="a", ts=T0 + 1000))
+    client.post("/events", json=event(id="b", ts=T0 + 2000))
+    got = client.get("/events", params={"since": T0 + 1000}).json()["events"]
     assert [e["id"] for e in got] == ["b"]
 
 
+def test_board_uptime_ts_is_replaced_with_arrival_time():
+    """ESP32s send millis() since boot. Left alone, a hardware event lands in
+    1970 and never correlates with the mail/file events of the same attack."""
+    import time as _t
+    before = int(_t.time() * 1000)
+    r = client.post("/events", json=event(id="hw", ts=45_000, layer="tamper",
+                                          type="case_opened", severity="critical", technique=None))
+    assert r.json()["ts"] >= before
+    got = client.get("/events").json()["events"][0]
+    assert got["ts"] >= before
+    assert got["details"]["device_ts"] == 45_000
+
+
+def test_epoch_ts_is_left_alone():
+    client.post("/events", json=event(id="ep", ts=T0))
+    got = client.get("/events").json()["events"][0]
+    assert got["ts"] == T0 and "device_ts" not in got["details"]
+
+
+def test_without_since_the_newest_events_are_returned():
+    for k in range(5):
+        client.post("/events", json=event(id=f"n{k}", ts=T0 + k * 1000))
+    got = client.get("/events", params={"limit": 2}).json()["events"]
+    assert [e["id"] for e in got] == ["n3", "n4"]
+
+
 def test_events_are_returned_oldest_first():
-    client.post("/events", json=event(id="late", ts=5000))
-    client.post("/events", json=event(id="early", ts=1000))
+    client.post("/events", json=event(id="late", ts=T0 + 5000))
+    client.post("/events", json=event(id="early", ts=T0 + 1000))
     assert [e["id"] for e in client.get("/events").json()["events"]] == ["early", "late"]
 
 

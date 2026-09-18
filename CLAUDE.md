@@ -1,107 +1,74 @@
-# SentinelMesh — working notes for Claude
+# SentinelMesh — notes for every Claude session in this repo
 
-Written for: me (Claude), to re-orient at the start of any session. Source of
-truth for intent is `SentinelMesh_Project_Brief_v3.pdf` (team brief v3,
-17 Sep 2026); `contracts/CONTRACT.md` is the source of truth for interfaces.
+Written for: any Claude session working here, whichever stream it belongs to.
+Claude Code loads this file into every session, so it holds only what is true
+for all of them. Stream-specific notes live in that stream's own folder.
 
-## 1. Who I am here
+## Which stream are you?
 
-**I am Claude 2: the console and integration engineer.**
+The work is split across three Claude sessions, each owning one folder. **Your
+human tells you which one you are. If you have not been told, ask — do not
+infer it from the folder you happen to be in.**
 
-The project is split into three streams that barely overlap, each on its own
-folder, held together by a contract frozen before anyone started:
+| Stream | Owns | Builds | Stream notes |
+|---|---|---|---|
+| Claude 1 — ML | `ml/` | MailGuard, FileGuard, FieldGuard model, EnergyGate model | `ml/README.md` |
+| Claude 2 — console + integration | `console/`, `contracts/` | console API, correlation, React console, serial bridge, runbook | `console/CLAUDE.md` |
+| Claude 3 — firmware | `firmware/` | ESP32 field node, gateway, attacker, INA219 monitor | `firmware/README.md` |
 
-| | Owns | Builds |
-|---|---|---|
-| Claude 1 | `ml/` | MailGuard (email) + FileGuard (malware) + the FieldGuard model |
-| **Claude 2 — me** | **`console/` and `contracts/`** | **console API, correlation, UI, serial bridge, stand-ins, runbook** |
-| Claude 3 | `firmware/` | ESP32 field node / gateway / attacker, ESP-NOW, post-quantum handshake |
+- **Edit only your own folder.** You may read the others to check integration;
+  report problems in someone else's folder to the human instead of fixing them.
+- `docs/` holds cross-stream plans (`v4_energy_split.md` — who does what in v4;
+  `hardware_setup.md` — the energy rig). Whoever is orchestrating edits those.
+- A stream may add its own `CLAUDE.md` inside its folder; Claude Code loads it
+  when working there. Never put stream-specific instructions in this file.
 
-**I do not edit `ml/` or `firmware/`.** I read `ml/reports/` for the Evidence
-page and write trace files the ML stream consumes — that is the whole coupling.
-I own `contracts/`, so if I change `CONTRACT.md` I add a `CHANGELOG.md` entry
-and tell the human. Each stream also builds stand-ins for the other two, so
-nobody waits.
+## The project
 
-## 2. What the project is
+Hackathon entry for **Code Cortex 3.0, Security track**. Four detection layers
+along the 2015 Ukraine grid attack chain — phishing email → malicious
+attachment → field network → physical access — plus a console that joins their
+alerts into one incident. **v4** adds a research claim, *the battery, not the
+message, is the attack surface*, with a measured energy budget and
+**EnergyGate**, a learned gatekeeper in front of the post-quantum handshake
+(spend / challenge / drop).
 
-Hackathon entry for **Code Cortex 3.0, Security track** (30-hour build). Four
-detection layers along one attack chain, modelled on the 23 Dec 2015 Ukraine
-grid attack — phishing mail → malicious attachment → field network → physical
-access — plus a console that joins the alerts into one incident.
+Sources of truth: the team briefs (v3; v4 summarised in
+`docs/v4_energy_split.md`) for intent, and `contracts/` for every interface.
 
-| Layer | Detects | Owner |
-|---|---|---|
-| L1 MailGuard | malicious email | Claude 1 |
-| L2 FileGuard | malicious Windows PE | Claude 1 |
-| L3 FieldGuard | replay / impersonation on the ESP32 radio link | Claude 1 (model) + 3 (firmware) |
-| L4 TamperGuard | case opened / node moved | Claude 3 |
-| Console | correlates all four into one incident | **me** |
+## Working rules for all streams
 
-## 3. My deliverables — status
+1. **Pull `master` before starting, and read the newest entry in
+   `contracts/CHANGELOG.md`.** Other sessions change shared shapes.
+2. **The contract is the interface.** `contracts/CONTRACT.md` plus the JSON
+   Schemas beside it. The console validates every event, trace row and energy
+   sample on arrival and rejects mismatches with a 422 that names the field.
+   To change a shape, ask the console stream (Claude 2), which owns
+   `contracts/`; every change gets a `CHANGELOG.md` entry announced to all three.
+3. **Never download, store or run live malware.** Malicious-file demos are
+   held-out dataset feature rows; only benign files are scanned live.
+4. **Honest numbers only.** Report held-out and group-split results next to the
+   flattering random-split ones, and detection at a fixed low false-alarm rate
+   rather than bare accuracy. Anything simulated is labelled SIMULATED and never
+   presented as a result. Quote the repo's measured numbers
+   (`ml/reports/metrics.json`), not the brief's, where they differ.
+5. **Correlation is rules, not ML** — the ML lives in the detectors. Say so.
+6. **Build stand-ins for the other streams** so nobody blocks on anybody.
 
-All built and verified, 46 tests passing:
+## Facts that bite every stream
 
-1. **`console/api`** — FastAPI on :8000. `POST /events`, `GET /events`,
-   `GET /incidents`, SQLite storage, every event validated against
-   `contracts/event.schema.json` (invalid → 422 naming the field).
-2. **`console/bridge/serial_bridge.py`** — pyserial, configurable port. Reads
-   `EVT`/`TRC`, sends `LABEL <x>`. Three sources: `--port`, `--replay`,
-   `--stdin`, so the demo never depends on hardware.
-3. **Correlation** — `api/correlation.py`. Rules only, five of them (R1–R5),
-   documented in the module docstring, one test each.
-4. **Streamlit UI** — `ui/app.py`. Timeline, Incidents (attack-chain strip +
-   Why panel + ATT&CK), Scan (calls ML :8001), Trace recording, Evidence.
-5. **Stand-ins** — `tools/mock_events.py` (the 5-beat story),
-   `tools/mock_serial.py` (EVT/TRC without hardware).
-6. **`console/demo/RUNBOOK.md`** — the demo script with a fallback per beat,
-   plus `demo/serial_log.txt` as the hardware-failure fallback.
-
-**Not mine / still open:** real firmware events (Claude 3), real trace
-recordings, the L3 model hand-off (`ml/data/traces/` → `make field-model` →
-`ml/export/field_model.h` → firmware).
-
-## 4. Hard-won facts (do not re-derive)
-
-- **`127.0.0.1`, never `localhost`.** On this Windows machine `localhost`
-  resolves to `::1` first and stalls **2047 ms per request** before falling
-  back to IPv4; `127.0.0.1` is **2.4 ms**. It made the serial bridge take
-  >120 s to replay 50 lines; after the fix, 0.73 s. Every default in
-  `console/` is already `127.0.0.1`. **The ML stream's `demo/run_demo.py` still
-  defaults to `localhost` — worth telling Claude 1.**
-- Streamlit serves HTML *before* running the script, so "the port answers"
-  proves nothing. `tests/test_ui_smoke.py` uses `AppTest` to actually execute
-  every page.
-- SQLite has no `ADD COLUMN IF NOT EXISTS`; `db.py` carries a tiny migration
-  list so a stale `console.db` on the gateway laptop does not crash.
-- The console stamps the **operator's** label on trace rows, not the gateway's,
-  and counts disagreements as `gw_label` + a UI warning — that catches
-  recording one attack under another's name.
-
-## 5. Project-wide rules (from the brief — these are the pitch)
-
-1. **Never download, store or run live malware.** Malicious file demos are
-   held-out *feature rows*; only benign files are scanned live.
-2. **Honest numbers only** — held-out-corpus and group-split numbers alongside
-   the flattering random-split one; detection at a fixed low false-alarm rate,
-   not bare accuracy.
-3. **Correlation is rules, not ML, and we say so.** The ML lives in the
-   detectors. This is a selling point, not an apology.
-4. Call L1 a *malicious-email* detector, not a phishing detector.
-5. State the blind spots openly: the 64-bit malware gap, the benign class
-   coming from one Windows install, `ImageBase` carrying most of the weight.
-
-## 6. Environment
-
-- `console/.venv` — Python 3.12.10, FastAPI, Streamlit, pyserial, jsonschema.
-  `ml/.venv` is the ML stream's, separate.
-- **The raw `security/` dataset is not on this machine**, so anything needing
-  `--data` cannot run here. The ML stream's trained models are committed.
-- Run everything from `console/`; see `console/README.md`.
-
-## 7. Measured ML numbers vs the brief (for the Evidence page)
-
-Quote **ours** (`ml/reports/metrics.json`), not the brief's, where they differ.
-The one material discrepancy: the brief says the dataset-only model flagged
-**42%** of benign third-party software; the repo measured **18.1%**. The bias is
-real but smaller. **Do not repeat "42%" as our own result.**
+- **Use `127.0.0.1`, never `localhost`.** On the team's Windows laptop,
+  `localhost` tries IPv6 first and stalls ~2 s per request (2047 ms vs 2.4 ms).
+- **Board timestamps are uptime, not wall-clock.** ESP32s have no clock, and
+  `new_event()` takes `uint32_t` (epoch ms does not fit). The console replaces any
+  `ts` below 1e12 with arrival time and keeps the original as
+  `details.device_ts`, so boards need not sync time.
+- **`MODE` belongs to the attacker board** (`MODE REPLAY|FLOOD|...`). The
+  gateway's defence setting is `DEFENSE <none|ratelimit|cookie|gate>`. The
+  console sends every control line to every board; boards ignore lines that
+  are not theirs.
+- **The raw `security/` dataset is not in the repo** (and not on every
+  machine). Anything taking `--data` needs its path from the human. Trained
+  models are committed.
+- Recorded trace files hand off console → ML by copying
+  `console/data/traces/*.jsonl` into `ml/data/traces/`.
