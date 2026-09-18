@@ -23,8 +23,17 @@ def _clip(x, lo, hi):
     return float(np.clip(x, lo, hi))
 
 
-def _row(rng, label, rssi_base):
-    """One physically-plausible window for `label`, around this session's rssi_base."""
+def _row(rng, label, rssi_base, battery_pct):
+    """One physically-plausible window for `label`, around this session's
+    rssi_base and battery_pct.
+
+    frag_complete_pct / dup_pct (v4-optional Trace fields, EnergyGate's
+    free signals): a legit sender's fragments mostly arrive complete with
+    few duplicates; replay is duplicates *by definition*; flood tends to
+    send incomplete garbage fast rather than clean duplicates.
+    battery_pct is the field node's own level, not attacker-controlled --
+    sampled once per session, same across every row in it.
+    """
     if label == "SYNTH_normal":
         row = dict(
             hs_per_s=_clip(rng.normal(0.5, 0.2), 0, 3),
@@ -35,6 +44,8 @@ def _row(rng, label, rssi_base):
             rssi_var=_clip(rng.normal(2.5, 1), 0.2, 8),
             loss_pct=_clip(rng.normal(0.5, 0.5), 0, 3),
             jitter_ms=_clip(rng.normal(2.5, 1), 0.5, 6),
+            frag_complete_pct=_clip(rng.normal(98, 2), 80, 100),
+            dup_pct=_clip(rng.normal(0.5, 0.5), 0, 3),
         )
     elif label == "SYNTH_weak_link":
         row = dict(
@@ -47,6 +58,8 @@ def _row(rng, label, rssi_base):
             rssi_var=_clip(rng.normal(10, 3), 4, 20),
             loss_pct=_clip(rng.normal(18, 8), 5, 45),
             jitter_ms=_clip(rng.normal(14, 5), 5, 35),
+            frag_complete_pct=_clip(rng.normal(65, 12), 20, 95),
+            dup_pct=_clip(rng.normal(5, 3), 0, 15),
         )
     elif label == "SYNTH_replay":
         row = dict(
@@ -60,6 +73,9 @@ def _row(rng, label, rssi_base):
             rssi_var=_clip(rng.normal(3, 1.5), 0.2, 9),
             loss_pct=_clip(rng.normal(1, 1), 0, 5),
             jitter_ms=_clip(rng.normal(3, 1.5), 0.5, 8),
+            # captured-and-replayed packets are complete by construction
+            frag_complete_pct=_clip(rng.normal(95, 3), 80, 100),
+            dup_pct=_clip(rng.normal(30, 10), 10, 70),
         )
     elif label == "SYNTH_flood":
         row = dict(
@@ -73,6 +89,9 @@ def _row(rng, label, rssi_base):
             rssi_var=_clip(rng.normal(6, 3), 0.5, 15),
             loss_pct=_clip(rng.normal(12, 6), 1, 40),
             jitter_ms=_clip(rng.normal(10, 5), 1, 30),
+            # spam over quality: often incomplete, some duplication
+            frag_complete_pct=_clip(rng.normal(35, 15), 5, 80),
+            dup_pct=_clip(rng.normal(15, 8), 0, 50),
         )
     elif label == "SYNTH_impersonation":
         row = dict(
@@ -87,20 +106,24 @@ def _row(rng, label, rssi_base):
             rssi_var=_clip(rng.normal(3, 1.5), 0.2, 9),
             loss_pct=_clip(rng.normal(1, 1), 0, 5),
             jitter_ms=_clip(rng.normal(2.5, 1), 0.5, 6),
+            # crafted to look legit: complete fragments, low duplication
+            frag_complete_pct=_clip(rng.normal(90, 5), 70, 100),
+            dup_pct=_clip(rng.normal(1, 1), 0, 5),
         )
     else:
         raise ValueError(label)
 
-    row.update(ts=0, node="gateway", label=label, window_ms=5000)
+    row.update(ts=0, node="gateway", label=label, window_ms=5000, battery_pct=battery_pct)
     return row
 
 
 def generate_session(rng, n_rows, class_weights=None):
     rssi_base = float(rng.uniform(-65, -45))
+    battery_pct = float(rng.uniform(20, 100))
     classes = SYNTH_CLASSES
     weights = class_weights or [0.5, 0.15, 0.12, 0.12, 0.11]
     labels = rng.choice(classes, size=n_rows, p=weights)
-    return [_row(rng, lab, rssi_base) for lab in labels]
+    return [_row(rng, lab, rssi_base, battery_pct) for lab in labels]
 
 
 def main(n_sessions=6, rows_per_session=120, seed=0):

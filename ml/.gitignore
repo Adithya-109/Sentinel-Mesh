@@ -33,3 +33,15 @@ tests/*.o
 # the real field model is only meaningful once real traces exist
 export/field_model.h
 reports/field_model_metrics.json
+
+# energygate test pipeline (v4): same deal, regenerate with
+# `make test-energygate` -- only the scripts are committed
+tests/synthetic_energygate.h
+tests/synthetic_energygate_metrics.json
+tests/energygate_parity_features.csv
+tests/energygate_harness.exe
+tests/energygate_harness.out
+
+# the real EnergyGate model is only meaningful once real traces exist
+export/energygate.h
+reports/energygate_metrics.json

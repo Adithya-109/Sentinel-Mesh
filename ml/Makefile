@@ -5,7 +5,7 @@ else
 PY ?= .venv/bin/python
 endif
 
-.PHONY: field-model test-field-model
+.PHONY: field-model test-field-model energygate test-energygate
 
 # Train the real on-device field model from data/traces/*.jsonl (Trace
 # rows per contracts/CONTRACT.md) and export it to export/field_model.h.
@@ -18,3 +18,15 @@ field-model:
 # field-model -- see tests/test_field_model_pipeline.py's docstring.
 test-field-model:
 	$(PY) tests/test_field_model_pipeline.py
+
+# Phase 3 (brief v4): train EnergyGate from data/traces/*.jsonl and export
+# it to export/energygate.h. Same data as field-model, different target
+# (spend/challenge/drop probability, not attack class).
+energygate:
+	$(PY) train_energygate.py
+
+# Proves the EnergyGate pipeline against synthetic SYNTH_-labelled data.
+# Never a substitute for energygate -- see
+# tests/test_energygate_pipeline.py's docstring.
+test-energygate:
+	$(PY) tests/test_energygate_pipeline.py
