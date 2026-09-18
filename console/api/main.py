@@ -25,7 +25,7 @@ import time
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import attack, config, correlation, db, energy, frontend, v4, validation
@@ -283,8 +283,23 @@ async def _json_body(request: Request) -> dict[str, Any]:
     return body if isinstance(body, dict) else {}
 
 
-# The built React frontend (console/web/dist), if present, at /. Mounted last so
-# every API route above wins; the app then calls /api/* on the same origin and
-# needs no dev proxy for the demo.
+# The built React frontend (console/web/dist), if present, at /. Registered
+# last so every API route above wins; the app then calls /api/* on the same
+# origin and needs no dev proxy for the demo.
+#
+# React Router gives the app a second real path (/dashboard, on top of the
+# landing page at /). StaticFiles(html=True) alone only auto-serves
+# index.html for "/" and directory-like paths -- a direct load or refresh on
+# /dashboard has no matching file and 404s. The catch-all below serves any
+# real file that exists (JS/CSS under /assets, favicon, etc.) and falls back
+# to index.html for everything else, which is what lets client-side routing
+# work on a hard refresh or a shared /dashboard link.
 if os.path.isdir(config.WEB_DIST):
-    app.mount("/", StaticFiles(directory=config.WEB_DIST, html=True), name="web")
+    app.mount("/assets", StaticFiles(directory=os.path.join(config.WEB_DIST, "assets")), name="web-assets")
+
+    @app.get("/{full_path:path}")
+    async def spa(full_path: str):
+        candidate = os.path.join(config.WEB_DIST, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(config.WEB_DIST, "index.html"))

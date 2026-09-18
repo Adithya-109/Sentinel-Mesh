@@ -403,7 +403,7 @@ Sentinel-Mesh/
 │   │   ├── main.py             # Event router and server entrypoint (:8000)
 │   │   └── correlation.py      # Deterministic incident correlation rules (R1–R5)
 │   ├── bridge/                 # Stateless serial bridge forwarding between ESP32 and HTTP
-│   ├── web/                    # Production React operator frontend (Vite + Tailwind v4)
+│   ├── web/                    # Production React operator frontend (Vite, hand-written CSS)
 │   ├── ui/                     # Streamlit fallback operator UI + trace recorder (:8501)
 │   ├── tools/                  # Hardware-in-the-loop mock stand-in tools
 │   │   ├── mock_rig.py         # Simulated INA219 reactive energy telemetry

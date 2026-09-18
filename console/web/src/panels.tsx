@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "./api";
+import TiltCard from "./components/TiltCard";
 import type { AttackProfile, Incident, Mode, SmEvent, Stage, Status } from "./types";
 import { ACTION, Card, Chip, EventRow, fmtNum, fmtTime, LINK, NODE, SeverityChip, techniqueName } from "./ui";
 
@@ -11,7 +12,7 @@ export function StatusBar({ s }: { s: Status | null }) {
   const budgetPct = s.budget_j !== null && s.budget_max_j ? Math.max(0, Math.min(100, (100 * s.budget_j) / s.budget_max_j)) : null;
   return (
     <div className="statusbar">
-      <div className="stat">
+      <TiltCard maxTilt={3} glare={false}><div className="stat">
         <div className="k">Field link</div>
         <div style={{ marginTop: 6 }}><Chip spec={LINK[s.link]} big /></div>
         <div className="nodes">
@@ -21,35 +22,35 @@ export function StatusBar({ s }: { s: Status | null }) {
             </Chip>
           ))}
         </div>
-      </div>
-      <div className="stat">
+      </div></TiltCard>
+      <TiltCard maxTilt={3} glare={false}><div className="stat">
         <div className="k">Battery</div>
         <div className="v">{fmtNum(s.battery_pct, 1, "%")}</div>
         <div className="m">crypto {s.crypto_level ? `ML-KEM-${s.crypto_level}` : "—"}</div>
-      </div>
-      <div className="stat">
+      </div></TiltCard>
+      <TiltCard maxTilt={3} glare={false}><div className="stat">
         <div className="k">Draw now</div>
         <div className="v">{fmtNum(s.power_mw, 0, "mW")}</div>
         <div className="m">
           {multiple !== null ? <><b>{multiple.toFixed(1)}&times;</b> idle ({s.baseline_mw?.toFixed(0)} mW)</> : "no idle baseline yet"}
         </div>
-      </div>
-      <div className="stat" title={`Estimate: measured draw against an assumed ${s.projection_assumes_wh ?? "?"} Wh cell`}>
+      </div></TiltCard>
+      <TiltCard maxTilt={3} glare={false}><div className="stat" title={`Estimate: measured draw against an assumed ${s.projection_assumes_wh ?? "?"} Wh cell`}>
         <div className="k">Projected life (est.)</div>
         <div className="v">{fmtNum(s.projected_days, s.projected_days !== null && s.projected_days < 10 ? 1 : 0, "days")}</div>
         <div className="m">at idle: {s.projected_days_idle !== null ? `${s.projected_days_idle.toFixed(1)} days` : "—"}</div>
-      </div>
-      <div className="stat">
+      </div></TiltCard>
+      <TiltCard maxTilt={3} glare={false}><div className="stat">
         <div className="k">EnergyGate budget</div>
         <div className="v">{fmtNum(s.budget_j, 1, s.budget_max_j ? `/ ${s.budget_max_j} J` : "J")}</div>
         {budgetPct !== null ? <div className="budget"><div style={{ width: `${budgetPct}%` }} /></div>
           : <div className="m">reported by the gateway once EnergyGate runs</div>}
-      </div>
-      <div className="stat">
+      </div></TiltCard>
+      <TiltCard maxTilt={3} glare={false}><div className="stat">
         <div className="k">Defence / attack</div>
         <div className="v" style={{ fontSize: "1.25rem", marginTop: 4 }}>{MODE_LABEL[s.mode]}</div>
         <div className="m">attack: <b>{ATTACK_LABEL[s.attack_profile]}</b></div>
-      </div>
+      </div></TiltCard>
     </div>
   );
 }

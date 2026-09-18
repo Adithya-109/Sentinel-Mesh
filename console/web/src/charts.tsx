@@ -13,8 +13,9 @@ import { fmtTime } from "./ui";
 // SVG presentation attributes do not reliably resolve CSS var(), so the chart
 // uses the same hex values as the :root tokens in styles.css.
 const C = {
-  ink: "#ffffff", ink2: "#c3c2b7", muted: "#898781", grid: "#2c2c2a", axis: "#383835",
-  s1: "#3987e5", s2: "#d95926", s3: "#199e70",
+  ink: "#ffffff", ink2: "#e2d5de", muted: "#a08595", grid: "#3d1433", axis: "#4a1f40",
+  s1: "#38bdf8", s2: "#e04c1e", s3: "#10b981",
+  power: "#e04c1e", battery: "#38bdf8",
 };
 
 const axisProps = {
@@ -95,7 +96,7 @@ export function PowerChart({ series, baseline }: { series: EnergySeries; baselin
               label={{ value: `idle ${baseline.toFixed(0)} mW`, position: "insideBottomRight", fill: C.ink2, fontSize: 13 }} />
           )}
           <Markers series={series} from={data[0].ts} to={data[data.length - 1].ts} />
-          <Line type="linear" dataKey="power_mw" name="draw" stroke={C.s1} strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line type="linear" dataKey="power_mw" name="draw" stroke={C.power} strokeWidth={2} dot={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -118,7 +119,7 @@ export function BatteryChart({ series }: { series: EnergySeries }) {
             domain={[(min: number) => Math.max(0, Math.floor(min - 0.5)), (max: number) => Math.min(100, Math.ceil(max + 0.5))]} />
           <Tooltip content={<TT />} cursor={{ stroke: C.ink2, strokeWidth: 1 }} />
           <Markers series={series} from={data[0].ts} to={data[data.length - 1].ts} />
-          <Line type="linear" dataKey="battery_pct" name="battery" stroke={C.s1} strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line type="linear" dataKey="battery_pct" name="battery" stroke={C.battery} strokeWidth={2} dot={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

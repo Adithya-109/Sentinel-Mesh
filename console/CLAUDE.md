@@ -31,6 +31,20 @@ v4 (`docs/v4_energy_split.md`, Claude 2 section — all nine items done):
 - **React console `web/`** (Vite + Recharts), stood up from `frontend-kit/`.
   `npm run build` → the API serves it at **http://127.0.0.1:8000/**.
   `web/src/types.ts` + `api.ts` must stay identical to the kit's copies.
+  Two routes: `/` (landing page) and `/dashboard` (the sidebar+tabs
+  operator console) — `App.tsx` is a `react-router-dom` shell,
+  `pages/LandingPage.tsx` + `pages/Dashboard.tsx` hold the real content.
+  Direct navigation/refresh on `/dashboard` needs the server-side catch-all
+  in `api/main.py` (`StaticFiles(html=True)` alone only auto-serves
+  `index.html` for `/`) — don't remove that route without re-testing a
+  hard refresh on `/dashboard`.
+  Visual design (palette, `components/CyberMeshBackground.tsx`,
+  `components/TiltCard.tsx`, `components/QuantumCore.tsx`) ported from a
+  separately-contributed `Front-End/` folder, since removed — its fixture
+  numbers were never real, three factual errors were fixed while porting
+  (wrong crypto version, fabricated hardware-support claims, fabricated
+  customer testimonials) — see the port commit for specifics before
+  reintroducing any of that copy.
 - `api/v4.py`, `energy.py`, `status.py`, `experiment.py`: `/status`, `/energy`,
   `/experiment` (+ run/stop/result), `/mode`, `/attack`, `/control`, `/reset`.
   All also under `/api/*`; `api/frontend.py` adapts `/api/events` +

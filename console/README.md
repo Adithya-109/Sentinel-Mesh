@@ -127,7 +127,12 @@ api/       main.py (FastAPI + store_event), correlation.py (the rules), db.py (S
            v4.py (status/energy/experiment/controls), energy.py, status.py,
            experiment.py, frontend.py (/api shapes + scan proxy)
 bridge/    serial_bridge.py -- serial <-> HTTP, control lines back to the boards
-web/       the React console (Vite + Recharts); src/types.ts + api.ts mirror frontend-kit/
+web/       the React console (Vite + Recharts); src/types.ts + api.ts mirror frontend-kit/.
+           Two routes: "/" a landing page, "/dashboard" the sidebar+tabs operator console
+           (Overview/Events/Incidents/Energy/Experiment/Scan). Visual design (palette, the
+           mesh-canvas background, the tilt-on-hover cards, the quantum-core hero visual)
+           ported from a separately-contributed Front-End/ folder (now removed -- its
+           design lives here, its data wiring was fixture-only and never real).
 frontend-kit/  the kit as delivered: fixtures + the reference types.ts/api.ts
 ui/        Streamlit fallback UI (5 pages, incl. trace recording)
 tools/     mock_rig.py, mock_events.py, mock_serial.py -- the other streams' stand-ins
