@@ -37,7 +37,7 @@ genuinely unseen by the models that score it.
 ## Run
 
 ```
-python run_demo.py [--ml-url http://localhost:8001] [--console-url http://localhost:8000]
+python run_demo.py [--ml-url http://127.0.0.1:8001] [--console-url http://127.0.0.1:8000]
 ```
 
 Scores every entry in `expected.json` against the ML service, prints

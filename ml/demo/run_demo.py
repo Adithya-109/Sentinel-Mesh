@@ -3,7 +3,12 @@ service, and POST every returned Event to the console (skipped, with a
 note, if the console isn't reachable).
 
 Usage:
-    python run_demo.py [--ml-url http://localhost:8001] [--console-url http://localhost:8000]
+    python run_demo.py [--ml-url http://127.0.0.1:8001] [--console-url http://127.0.0.1:8000]
+
+Defaults are 127.0.0.1, not localhost: on Windows, localhost resolves to
+::1 first and stalls ~2s per request before falling back to IPv4 (measured
+in console/, see root CLAUDE.md) -- every other default in this repo is
+already 127.0.0.1, this file was the one holdout.
 
 Run build_all.py and build_demo_fixtures.py first.
 """
@@ -68,8 +73,8 @@ def score_file_upload(ml_url, path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ml-url", default="http://localhost:8001")
-    ap.add_argument("--console-url", default="http://localhost:8000")
+    ap.add_argument("--ml-url", default="http://127.0.0.1:8001")
+    ap.add_argument("--console-url", default="http://127.0.0.1:8000")
     args = ap.parse_args()
 
     expected_path = os.path.join(HERE, "expected.json")
