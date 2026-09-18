@@ -1,0 +1,409 @@
+{
+  "what": "FileGuard red-team in feature space: detection after physically-plausible edits to the malware's PE header data",
+  "malware_source": "the 20 held-out demo malware rows only -- a probe, NOT a full-test-set result",
+  "donor_pool": "3056 real benign binaries from one machine, never used in training; matched to the malware's architecture",
+  "threshold": 0.9579,
+  "feature_control_classes": {
+    "trivial": [
+      "MajorLinkerVersion",
+      "MinorLinkerVersion",
+      "MajorOperatingSystemVersion",
+      "MinorOperatingSystemVersion",
+      "MajorImageVersion",
+      "MinorImageVersion",
+      "MajorSubsystemVersion",
+      "MinorSubsystemVersion",
+      "CheckSum",
+      "LoaderFlags",
+      "SizeOfStackReserve",
+      "SizeOfStackCommit",
+      "SizeOfHeapReserve",
+      "SizeOfHeapCommit"
+    ],
+    "moderate": [
+      "ImageBase",
+      "DllCharacteristics",
+      "Subsystem",
+      "ResourcesNb",
+      "ResourcesMeanEntropy",
+      "ResourcesMinEntropy",
+      "ResourcesMaxEntropy",
+      "ResourcesMeanSize",
+      "ResourcesMinSize",
+      "ResourcesMaxSize",
+      "VersionInformationSize",
+      "ImportsNbDLL",
+      "ImportsNb",
+      "SectionsNb",
+      "SectionsMeanEntropy",
+      "SectionsMinEntropy",
+      "SectionsMaxEntropy",
+      "SectionsMeanRawsize",
+      "SectionsMinRawsize",
+      "SectionMaxRawsize",
+      "SectionsMeanVirtualsize",
+      "SectionsMinVirtualsize",
+      "SectionMaxVirtualsize",
+      "SizeOfImage",
+      "SizeOfInitializedData"
+    ],
+    "hard_not_modelled": [
+      "Machine",
+      "SizeOfOptionalHeader",
+      "Characteristics",
+      "SizeOfCode",
+      "SizeOfUninitializedData",
+      "AddressOfEntryPoint",
+      "BaseOfCode",
+      "BaseOfData",
+      "SectionAlignment",
+      "FileAlignment",
+      "SizeOfHeaders",
+      "NumberOfRvaAndSizes",
+      "ImportsNbOrdinal",
+      "ExportNb",
+      "LoadConfigurationSize"
+    ]
+  },
+  "results": {
+    "clean": {
+      "detected": 20,
+      "n": 20,
+      "rate": 1.0,
+      "ci95": [
+        0.8389,
+        1.0
+      ]
+    },
+    "tiers": [
+      {
+        "name": "T1 header bytes",
+        "adaptive": {
+          "detected": 4,
+          "n": 20,
+          "rate": 0.2,
+          "ci95": [
+            0.0807,
+            0.416
+          ]
+        },
+        "single_shot_detection_rate": 0.484
+      },
+      {
+        "name": "T2 + ImageBase/flags",
+        "adaptive": {
+          "detected": 0,
+          "n": 20,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.1611
+          ]
+        },
+        "single_shot_detection_rate": 0.24
+      },
+      {
+        "name": "T3 + resources",
+        "adaptive": {
+          "detected": 0,
+          "n": 20,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.1611
+          ]
+        },
+        "single_shot_detection_rate": 0.174
+      },
+      {
+        "name": "T4 + imports",
+        "adaptive": {
+          "detected": 0,
+          "n": 20,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.1611
+          ]
+        },
+        "single_shot_detection_rate": 0.174
+      },
+      {
+        "name": "T5 + sections",
+        "adaptive": {
+          "detected": 0,
+          "n": 20,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.1611
+          ]
+        },
+        "single_shot_detection_rate": 0.198
+      }
+    ],
+    "solo": [
+      {
+        "name": "only header_bytes",
+        "adaptive": {
+          "detected": 4,
+          "n": 20,
+          "rate": 0.2,
+          "ci95": [
+            0.0807,
+            0.416
+          ]
+        },
+        "single_shot_detection_rate": 0.484
+      },
+      {
+        "name": "only base_flags",
+        "adaptive": {
+          "detected": 17,
+          "n": 20,
+          "rate": 0.85,
+          "ci95": [
+            0.6396,
+            0.9476
+          ]
+        },
+        "single_shot_detection_rate": 0.894
+      },
+      {
+        "name": "only resources",
+        "adaptive": {
+          "detected": 20,
+          "n": 20,
+          "rate": 1.0,
+          "ci95": [
+            0.8389,
+            1.0
+          ]
+        },
+        "single_shot_detection_rate": 1.0
+      },
+      {
+        "name": "only imports",
+        "adaptive": {
+          "detected": 19,
+          "n": 20,
+          "rate": 0.95,
+          "ci95": [
+            0.7639,
+            0.9911
+          ]
+        },
+        "single_shot_detection_rate": 0.998
+      },
+      {
+        "name": "only sections",
+        "adaptive": {
+          "detected": 20,
+          "n": 20,
+          "rate": 1.0,
+          "ci95": [
+            0.8389,
+            1.0
+          ]
+        },
+        "single_shot_detection_rate": 1.0
+      }
+    ],
+    "single_feature": {
+      "MajorOperatingSystemVersion": {
+        "class": "trivial",
+        "samples_evaded": 2,
+        "of": 20
+      },
+      "CheckSum": {
+        "class": "trivial",
+        "samples_evaded": 1,
+        "of": 20
+      },
+      "ImageBase": {
+        "class": "moderate",
+        "samples_evaded": 3,
+        "of": 20
+      },
+      "Subsystem": {
+        "class": "moderate",
+        "samples_evaded": 2,
+        "of": 20
+      }
+    }
+  },
+  "sensitivity_donors_pool_by_attacker_effort": {
+    "pool_sizes": {
+      "all benign": 3056,
+      "consumer apps only": 1158,
+      "EXEs only": 790,
+      "consumer-app EXEs only": 275
+    },
+    "detected": {
+      "all benign": {
+        "K=1": {
+          "T1_header_bytes_detected": 8,
+          "T2_plus_imagebase_flags_detected": 1,
+          "of": 20
+        },
+        "K=5": {
+          "T1_header_bytes_detected": 4,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        },
+        "K=25": {
+          "T1_header_bytes_detected": 2,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        },
+        "K=100": {
+          "T1_header_bytes_detected": 1,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        }
+      },
+      "consumer apps only": {
+        "K=1": {
+          "T1_header_bytes_detected": 18,
+          "T2_plus_imagebase_flags_detected": 15,
+          "of": 20
+        },
+        "K=5": {
+          "T1_header_bytes_detected": 9,
+          "T2_plus_imagebase_flags_detected": 4,
+          "of": 20
+        },
+        "K=25": {
+          "T1_header_bytes_detected": 2,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        },
+        "K=100": {
+          "T1_header_bytes_detected": 0,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        }
+      },
+      "EXEs only": {
+        "K=1": {
+          "T1_header_bytes_detected": 7,
+          "T2_plus_imagebase_flags_detected": 5,
+          "of": 20
+        },
+        "K=5": {
+          "T1_header_bytes_detected": 4,
+          "T2_plus_imagebase_flags_detected": 1,
+          "of": 20
+        },
+        "K=25": {
+          "T1_header_bytes_detected": 1,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        },
+        "K=100": {
+          "T1_header_bytes_detected": 0,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        }
+      },
+      "consumer-app EXEs only": {
+        "K=1": {
+          "T1_header_bytes_detected": 14,
+          "T2_plus_imagebase_flags_detected": 12,
+          "of": 20
+        },
+        "K=5": {
+          "T1_header_bytes_detected": 5,
+          "T2_plus_imagebase_flags_detected": 2,
+          "of": 20
+        },
+        "K=25": {
+          "T1_header_bytes_detected": 1,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        },
+        "K=100": {
+          "T1_header_bytes_detected": 0,
+          "T2_plus_imagebase_flags_detected": 0,
+          "of": 20
+        }
+      }
+    }
+  },
+  "where_the_models_malicious_evidence_sits": {
+    "share_of_malicious_evidence": {
+      "moderate": 0.5053,
+      "trivial": 0.2525,
+      "hard (can only be raised)": 0.1482,
+      "hard (not modelled)": 0.094
+    },
+    "top_features": [
+      {
+        "feature": "ImageBase",
+        "share": 0.3159,
+        "class": "moderate"
+      },
+      {
+        "feature": "SectionsMaxEntropy",
+        "share": 0.1441,
+        "class": "hard (can only be raised)"
+      },
+      {
+        "feature": "MajorLinkerVersion",
+        "share": 0.0868,
+        "class": "trivial"
+      },
+      {
+        "feature": "MajorSubsystemVersion",
+        "share": 0.0556,
+        "class": "trivial"
+      },
+      {
+        "feature": "VersionInformationSize",
+        "share": 0.0543,
+        "class": "moderate"
+      },
+      {
+        "feature": "MajorOperatingSystemVersion",
+        "share": 0.0391,
+        "class": "trivial"
+      },
+      {
+        "feature": "CheckSum",
+        "share": 0.0353,
+        "class": "trivial"
+      },
+      {
+        "feature": "Characteristics",
+        "share": 0.0274,
+        "class": "hard (not modelled)"
+      }
+    ]
+  },
+  "overlay_and_header_edit_demo": {
+    "benign_sample": "ping.exe",
+    "appended_junk_bytes": 2097152,
+    "features_changed_by_appended_junk": [],
+    "note": "FileGuard has no file-size or whole-file-entropy feature, and section statistics cover only the sections, so bytes appended after the last section (an overlay) change none of the 54 features.",
+    "header_edits_requested": {
+      "MajorOperatingSystemVersion": "0x6",
+      "MajorLinkerVersion": "0xe",
+      "CheckSum": "0x12345",
+      "ImageBase": "0x10000000",
+      "Subsystem": "0x2"
+    },
+    "header_edits_read_back": {
+      "MajorOperatingSystemVersion": "0x6",
+      "MajorLinkerVersion": "0xe",
+      "CheckSum": "0x12345",
+      "ImageBase": "0x10000000",
+      "Subsystem": "0x2"
+    },
+    "header_edits_applied": true
+  },
+  "caveats": [
+    "Feature-space attack: it edits the 54 numbers, not a real binary. Header edits are shown to be expressible on a real benign file, but not every tier's edit combination was built into a working malware executable.",
+    "ImageBase changes need a relinked binary, base relocations, or a wrapper; a pre-built no-relocation executable cannot simply be rebased.",
+    "Donor values come from the same distribution the model was recently fixed on; a model retrained on these donors would see them as benign, which is the point of an attacker copying them."
+  ]
+}

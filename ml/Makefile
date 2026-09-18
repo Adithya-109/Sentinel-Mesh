@@ -5,7 +5,7 @@ else
 PY ?= .venv/bin/python
 endif
 
-.PHONY: field-model test-field-model energygate test-energygate test-fileguard
+.PHONY: field-model test-field-model energygate test-energygate test-fileguard redteam-fileguard
 
 # Train the real on-device field model from data/traces/*.jsonl (Trace
 # rows per contracts/CONTRACT.md) and export it to export/field_model.h.
@@ -31,7 +31,14 @@ energygate:
 test-energygate:
 	$(PY) tests/test_energygate_pipeline.py
 
-# FileGuard explanations: SHAP additivity, parity with the shap library (if
-# installed) and verdict-directed ranking. Uses the committed model + demo rows.
+# FileGuard explanations (SHAP additivity, parity with the shap library if
+# installed, verdict-directed ranking) and the red-team library's physical-
+# consistency invariants. Uses the committed model + demo rows; no dataset.
 test-fileguard:
 	$(PY) tests/test_fileguard_shap.py
+	$(PY) tests/test_fileguard_redteam.py
+
+# Red-team FileGuard in feature space (writes reports/fileguard_redteam.json).
+# Add DATA=path/to/security for the full held-out test set instead of the 20 demo rows.
+redteam-fileguard:
+	$(PY) redteam_fileguard.py $(if $(DATA),--data "$(DATA)",)
