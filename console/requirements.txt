@@ -9,3 +9,4 @@ pandas
 pytest
 httpx
 python-multipart
+scikit-learn==1.8.0  # SMS Guard (channels/sms/*.joblib) is pickled with this version

@@ -105,7 +105,17 @@ def _load_model(channel: dict):
         raise HTTPException(503, f"{channel_id}: model files not found -- run "
                                  f"channels/{channel_id}/train.py first")
 
-    import joblib
+    try:
+        import joblib
+    except ImportError:
+        raise HTTPException(503, f"{channel_id}: scikit-learn/joblib are not installed in this environment "
+                                 f"-- pip install -r console/requirements.txt")
+    # The vectorizer pickle refers to functions defined in the channel's own
+    # module (channels/<id>/<id>_guard.py), so that folder must be importable
+    # *before* unpickling, not just before the first explain() call.
+    channel_dir = os.path.join(config.CHANNELS_DIR, channel_id)
+    if channel_dir not in sys.path:
+        sys.path.insert(0, channel_dir)
     model = joblib.load(model_path)
     vec = joblib.load(vec_path)
     _models[channel_id] = (vec, model)
