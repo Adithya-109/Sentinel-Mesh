@@ -7,6 +7,7 @@ import SiteFooter from "../components/SiteFooter";
 import SiteHeader from "../components/SiteHeader";
 import type { NavItem } from "../components/SiteHeader";
 import TileField from "../components/TileField";
+import TimelineLine from "../components/TimelineLine";
 import "../landing.css";
 
 // The design follows nodenza.com (see styles.css). The words are this project's
@@ -62,6 +63,8 @@ export default function LandingPage() {
       <SiteHeader nav={nav} action={<Link to="/dashboard" className="link">Open console</Link>} />
 
       <main className="main">
+        <TimelineLine />
+
         <section className="hero" id="top">
           <div className="hero-content">
             <h1 className="title">Protect the battery,<br />not just the message.</h1>

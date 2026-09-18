@@ -1,6 +1,27 @@
 /* Landing page -- the marketing flow, in the shared design system (styles.css). */
 
 .landing .main { display: block; }
+.landing .hero, .landing .statement, .landing .choose { position: relative; z-index: 1; }
+
+/* the dotted timeline that runs down the page, behind the content */
+.timeline { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.tl-base, .tl-live { fill: none; stroke-width: 3.6; stroke-linecap: round; stroke-dasharray: 0.01 13; }
+.tl-base { stroke: rgba(50, 0, 111, 0.28); }
+.tl-live { stroke: var(--c2); }
+.tl-node .tl-dot { fill: var(--c0); stroke: var(--c2); stroke-width: 2.2; transition: fill 0.45s var(--ease); }
+.tl-node .tl-halo { fill: rgba(50, 0, 111, 0.13); opacity: 0; transform: scale(0.3); transform-box: fill-box; transform-origin: center; transition: opacity 0.5s var(--ease), transform 0.7s var(--ease); }
+.tl-node.on .tl-dot { fill: var(--c2); }
+.tl-node.on .tl-halo { opacity: 1; transform: scale(1); }
+.tl-start .tl-dot { stroke-width: 1.8; }
+.tl-label { font-size: max(13px, calc(17 * var(--u))); font-weight: 500; letter-spacing: -0.02em; fill: var(--c2); opacity: 0.4; transition: opacity 0.5s var(--ease); }
+.tl-label .tl-n { font-weight: 700; }
+.tl-node.on .tl-label { opacity: 1; }
+.tl-lead { transition: opacity 0.4s; }
+.tl-lead-core { fill: var(--c2); }
+.tl-lead-halo { fill: var(--c2); opacity: 0.16; transform-box: fill-box; transform-origin: center; animation: leadPulse 1.9s ease-in-out infinite; }
+@keyframes leadPulse { 0%, 100% { transform: scale(1); opacity: 0.2; } 50% { transform: scale(1.7); opacity: 0.04; } }
+@media (max-width: 1023.98px) { .tl-label { display: none; } .tl-base, .tl-live { stroke-width: 3; stroke-dasharray: 0.01 11; } }
+@media (prefers-reduced-motion: reduce) { .tl-lead-halo { animation: none; } }
 
 /* hero */
 .hero {
@@ -35,7 +56,7 @@
 .statement.right .statement-text { margin-top: calc(22 * var(--u)); }
 
 /* "what brings you here" -- two cards that flip in 3D */
-.choose { min-height: 100vh; padding: calc(150 * var(--u)) var(--wr) calc(90 * var(--u)); display: flex; flex-direction: column; justify-content: center; scroll-snap-align: start; }
+.choose { min-height: 100vh; padding: calc(150 * var(--u)) var(--wr) calc(320 * var(--u)); display: flex; flex-direction: column; justify-content: center; scroll-snap-align: start; }
 .choose-head { text-align: center; max-width: calc(760 * var(--u)); margin: 0 auto calc(50 * var(--u)); }
 .choose-head .title { font-size: var(--f-l); }
 .choose-grid { display: grid; grid-template-columns: 1fr 1fr; }
@@ -74,9 +95,9 @@
 @media (max-width: 1023.98px) {
   .hero, .statement, .choose, .join { min-height: auto; }
   .hero { min-height: 100vh; padding-top: 110px; }
-  .statement { grid-template-columns: 1fr; padding: 90px var(--wr); }
+  .statement { grid-template-columns: 1fr; padding: 90px var(--wr) 90px 32px; }
   .statement-box, .statement.right .statement-box { grid-column: 1; }
-  .choose { padding: 100px var(--wr) 60px; }
+  .choose { padding: 100px var(--wr) 60px 32px; }
   .choose-grid { grid-template-columns: 1fr; gap: 20px; }
   .choose-col + .choose-col { border-left: 0; }
   .join-inner { padding: 100px var(--wr); }
