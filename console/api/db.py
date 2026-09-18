@@ -8,10 +8,48 @@ behind.
 import json
 import os
 import sqlite3
+import threading
 import time
 from typing import Any, Optional
 
 from . import config
+
+
+class _LockingConnection(sqlite3.Connection):
+    """sqlite3.Connection with one process-wide lock around every statement.
+
+    The console shares a single connection across every request, and FastAPI
+    runs plain `def` routes in a thread-pool -- `check_same_thread=False`
+    only disables Python's own thread-affinity guard, it does not make the
+    underlying SQLite connection safe for two threads to touch at once.
+    Reproduced live: with the v4 mock rig posting energy/gate_decision data
+    every ~1s while the frontend polls /api/status, /api/energy and
+    /api/incidents on the same cadence, two threads hit the shared
+    connection at the same moment often enough to raise
+    `sqlite3.InterfaceError: bad parameter or other API misuse` -- v3 never
+    wrote to the database this often, so it never surfaced before v4.
+    A single lock around every statement (not just around commits) is the
+    standard fix for "one shared connection, many threads" and covers every
+    caller automatically, since every module executes through this same
+    connection object.
+    """
+    _lock = threading.Lock()
+
+    def execute(self, *args, **kwargs):
+        with self._lock:
+            return super().execute(*args, **kwargs)
+
+    def executemany(self, *args, **kwargs):
+        with self._lock:
+            return super().executemany(*args, **kwargs)
+
+    def executescript(self, *args, **kwargs):
+        with self._lock:
+            return super().executescript(*args, **kwargs)
+
+    def commit(self):
+        with self._lock:
+            return super().commit()
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -119,7 +157,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
 def connect(db_path: Optional[str] = None) -> sqlite3.Connection:
     path = db_path or config.DB_PATH
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    conn = sqlite3.connect(path, check_same_thread=False)
+    conn = sqlite3.connect(path, check_same_thread=False, factory=_LockingConnection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
