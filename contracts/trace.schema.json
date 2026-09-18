@@ -26,8 +26,11 @@
     "rssi_mean": {"type": "number", "maximum": 0},
     "rssi_var": {"type": "number", "minimum": 0},
     "loss_pct": {"type": "number", "minimum": 0, "maximum": 100},
-    "jitter_ms": {"type": "number", "minimum": 0}
+    "jitter_ms": {"type": "number", "minimum": 0},
+    "battery_pct": {"type": "number", "minimum": 0, "maximum": 100, "description": "v4 energy delta: field node's battery level. Optional so pre-v4 producers keep validating."},
+    "frag_complete_pct": {"type": "number", "minimum": 0, "maximum": 100, "description": "v4 energy delta: % of this sender's fragment sets that arrived complete. Optional, see battery_pct."},
+    "dup_pct": {"type": "number", "minimum": 0, "maximum": 100, "description": "v4 energy delta: duplicate-packet rate on the link. Optional, see battery_pct."}
   },
   "additionalProperties": true,
-  "$comment": "additionalProperties is open so the console can stamp provenance (session, gw_label) without breaking firmware-side producers. sentinel_ml/field_model.py selects columns by name, so extra keys are ignored downstream."
+  "$comment": "additionalProperties is open so the console can stamp provenance (session, gw_label) without breaking firmware-side producers. sentinel_ml/field_model.py selects columns by name, so extra keys are ignored downstream. battery_pct/frag_complete_pct/dup_pct (v4) are deliberately NOT in `required`: they are EnergyGate's free signals, additive on top of the v1/v3 FieldGuard feature set, and existing producers should keep validating without them."
 }

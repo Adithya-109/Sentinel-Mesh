@@ -1,4 +1,4 @@
-# SentinelMesh integration contract v1 (owner: Console/Claude 2. Announce any change to all three.)
+# SentinelMesh integration contract v1 + v2-energy delta (owner: Console/Claude 2. Announce any change to all three.)
 
 ## Ports / transport
 - Console API: http://localhost:8000
@@ -20,6 +20,8 @@
 | field  | attack_detected (details.kind: replay_campaign, handshake_flood, impersonation) | by kind | high |
 | field  | link_degraded                                    | null       | low      |
 | field  | rekey (details.level: 512/768/1024, details.reason) | null    | info     |
+| field  | gate_decision (details: action=spend\|challenge\|drop, prob_real, budget_j, cost_est_mj) | null | info(spend)/low(challenge)/medium(drop) |
+| field  | energy_sample (details: mj_hour, battery_pct, source=field-1\|monitor) | null | info |
 | tamper | case_opened / moved / voltage_anomaly            | null       | critical |
 
 ## HTTP
@@ -36,3 +38,8 @@
 { "ts": 0, "node": "gateway", "label": "normal", "window_ms": 5000, "hs_per_s": 0, "hs_fail": 0,
   "replay_rej": 0, "auth_fail": 0, "stale": 0, "frag_timeout": 0, "rssi_mean": -55.2,
   "rssi_var": 3.1, "loss_pct": 0.0, "jitter_ms": 2.4 }
+
+v4 adds three optional fields to the same row — EnergyGate's free signals,
+not required so pre-v4 producers keep validating: `battery_pct` (0-100),
+`frag_complete_pct` (0-100, % of this sender's fragment sets that arrived
+complete), `dup_pct` (0-100, duplicate-packet rate).

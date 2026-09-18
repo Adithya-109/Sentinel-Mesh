@@ -5,6 +5,41 @@ streams.** Entries are newest first.
 
 ---
 
+## 2026-09-18 — v2 energy delta (additive, frozen ahead of the three streams starting v4 work)
+
+Brief v4 adds EnergyGate (a gatekeeper in front of the PQC handshake) and a
+measured energy budget. Two new `field`-layer event types and three new
+optional Trace fields, so all three streams can start in parallel against a
+frozen shape instead of serializing on a contract discussion:
+
+- **`gate_decision`** — one per admission decision. `details.action` is
+  `spend|challenge|drop`, plus `prob_real` (0-1) and `budget_j` (token-bucket
+  balance after the decision) are required; `cost_est_mj` is optional.
+  Emitted by firmware (Claude 3) each time EnergyGate/the cookie challenge
+  runs; the console (me) renders it as the per-decision feed the brief's demo
+  beat 4 needs.
+- **`energy_sample`** — periodic telemetry, independent of any one decision.
+  `details.mj_hour` and `details.source` (`field-1|monitor`) are required,
+  `details.battery_pct` optional. This is what feeds the battery-over-time
+  chart (brief section 6's closing slide).
+- **Trace row**: three new *optional* fields — `battery_pct`,
+  `frag_complete_pct`, `dup_pct` — EnergyGate's free signals (ML stream,
+  Claude 1, uses these to train it). Not added to `required`: existing
+  producers (mocks, any already-recorded sessions) keep validating without
+  them, per the same reasoning as `additionalProperties: true` above.
+
+No existing event type, severity mapping, or required field changed. No
+serial line format changed — `gate_decision`/`energy_sample` events travel
+as ordinary `EVT <json>` lines, same as everything else.
+
+**Still open, not decided by this entry** (each stream's own call, not a
+contract question): the token-bucket refill rate and starting balance, the
+exact EnergyGate feature set/model format, and how `cost_est_mj` gets
+estimated before a handshake it hasn't run yet. Raise here if any of those
+turn out to need a shared shape.
+
+---
+
 ## 2026-09-18 — schemas added (additive, no semantic change)
 
 Added, alongside the unchanged `CONTRACT.md` v1:
