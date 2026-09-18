@@ -116,6 +116,32 @@ upweighted (sample weight 20), cuts that to **0.44%**
   the two classes were compiled/linked), not necessarily with malicious
   *behavior*. Worth stress-testing before trusting it against
   adversarially-built binaries.
+- **Red-team gap (measured in feature space, 2026-09-18).** FileGuard scores
+  54 header numbers, so an attacker who never touches the malicious code can
+  still edit most of them (`sentinel_ml/redteam.py` classifies every feature;
+  results in `reports/fileguard_redteam.json`, chart
+  `charts/fileguard_red_team.png`). On the 20 held-out demo malware rows --
+  **a probe, not a full-test-set result** -- detection fell from 20/20 to
+  **4/20** (adaptive attacker, 95% CI 8-42%; 48% for a naive one) after copying
+  14 header bytes (linker/OS/image/subsystem versions, checksum, stack/heap
+  sizes) from real benign files, and to **0/20** (CI 0-16%) after also changing
+  ImageBase, DllCharacteristics and Subsystem. It holds across donor pools and
+  attacker effort. About 76% of the model's evidence for "malicious" sits on
+  features an attacker can change, ImageBase alone 32% -- the shortcut the
+  bullet above warned about, now measured. Appended junk ("inflate size, dilute
+  entropy") does nothing: there is no file-size or whole-file-entropy feature.
+  Caveats: feature space only (header edits were shown to apply on a real
+  benign file, not built into working malware), and rebasing a pre-built
+  no-relocation binary needs a relinker or wrapper. **Not yet fixed:**
+  adversarial retraining needs the malware dataset, which is not in the repo.
+- **Real-world false alarms on unseen benign software.** On 3,056 real
+  Windows and installed-app binaries from one machine, none in training
+  (`reports/fileguard_realworld_fp.json`), the production model flags 6 =
+  **0.20%** (CI 0.09-0.43%). That headline is flattered by Windows system files
+  (0 of 1,898), which resemble the dataset's own benign class. Installed apps
+  only: **0.52%** (6/1,158, CI 0.24-1.13%); 32-bit apps **1.10%** (4/364, CI
+  0.43-2.79%). Consistent with the 0.44% held-out-package figure above. The
+  files are assumed benign, not verified, and come from one machine.
 
 **Explanations.** Exact SHAP values (LightGBM's `pred_contrib` is TreeSHAP;
 `tests/test_fileguard_shap.py` checks additivity and, where the `shap` library
