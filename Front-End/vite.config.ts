@@ -41,6 +41,12 @@ export default defineConfig(({ mode }) => {
 ],
       },
       fs: { allow: ['..'] },
+      // Dev-only proxy to the console API, same pattern as console/web/vite.config.ts.
+      // 127.0.0.1, never "localhost" -- see that file's comment (Windows resolves
+      // localhost via ::1 first and stalls ~2s/request; the UI polls every second).
+      // src/imports/api.ts already falls back to /fixtures/*.json when this 404s or
+      // the backend is offline, so the app still runs with nothing listening on :8000.
+      proxy: { '/api': 'http://127.0.0.1:8000' },
     },
     preview: {
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',

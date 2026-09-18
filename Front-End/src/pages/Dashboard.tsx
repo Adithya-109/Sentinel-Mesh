@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [events, setEvents] = useState<SmEvent[]>([])
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [energySamples, setEnergySamples] = useState<EnergySample[]>([])
+  const [energyMarkers, setEnergyMarkers] = useState<{ ts: number; label: string }[]>([])
   const [experiment, setExperiment] = useState<ExperimentRow[]>([])
   const [scanText, setScanText] = useState('')
   const [scanResults, setScanResults] = useState<ScanResult[] | null>(null)
@@ -106,6 +107,13 @@ export default function Dashboard() {
           const existing = new Set(prev.map((s) => s.ts))
           const fresh = data.samples.filter((s) => !existing.has(s.ts))
           return [...prev, ...fresh].slice(-600)
+        })
+      }
+      if (data.markers?.length > 0) {
+        setEnergyMarkers((prev) => {
+          const existing = new Set(prev.map((m) => `${m.ts}:${m.label}`))
+          const fresh = data.markers.filter((m) => !existing.has(`${m.ts}:${m.label}`))
+          return [...prev, ...fresh].slice(-20)
         })
       }
     } catch {}
@@ -171,13 +179,27 @@ export default function Dashboard() {
     battery: Math.round(s.battery_pct * 10) / 10,
   }))
 
-  // Attack start at ~180s, EnergyGate at ~420s
-  const attackAt = energySamples.length > 0
-    ? Math.round((1789000180000 - energySamples[0].ts) / 1000)
-    : null
-  const gateAt = energySamples.length > 0
-    ? Math.round((1789000420000 - energySamples[0].ts) / 1000)
-    : null
+  // Real markers from GET /energy (api/energy.py's energy_markers table --
+  // "attack starts: <profile>", "attack stopped", the defence mode changing,
+  // experiment start/end), not the two hardcoded fixture-only timestamps this
+  // used to have (1789000180000 / 1789000420000 only ever matched the static
+  // fixture's fake timeline and never lined up with live data at all).
+  const chartMarkers = energySamples.length > 0
+    ? energyMarkers
+        .filter((m) => m.ts >= energySamples[0].ts)
+        .map((m) => ({
+          t: Math.round((m.ts - baseTs) / 1000),
+          label: m.label,
+          isAttack: /attack/i.test(m.label) && !/stop/i.test(m.label),
+        }))
+    : []
+
+  // Recharts renders one tick per unique X value with no interval set, which
+  // overlaps into unreadable text once a live series grows past a few dozen
+  // points (console/CLAUDE.md notes the same Recharts gotcha for markers).
+  // Thin to roughly 8 evenly-spaced ticks regardless of how many samples
+  // have accumulated.
+  const xTickInterval = Math.max(0, Math.ceil(energyChartData.length / 8) - 1)
 
   return (
     <div
@@ -695,7 +717,7 @@ export default function Dashboard() {
               <div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Energy Dissipation</h1>
                 <p className="text-xs text-[#e2d5de]/60 mt-1 font-['Figtree',sans-serif]">
-                  Hardware joule telemetry collected via INA219 sensor on nRF5340 board.
+                  Hardware joule telemetry collected via INA219 sensor on the ESP32 field node.
                 </p>
               </div>
 
@@ -721,18 +743,21 @@ export default function Dashboard() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#3d1433" />
-                    <XAxis dataKey="t" tick={{ fill: '#e2d5de', fontSize: 10, fontFamily: 'Roboto Mono' }} label={{ value: 'seconds', position: 'insideRight', fill: '#e2d5de', fontSize: 10 }} />
+                    <XAxis dataKey="t" interval={xTickInterval} tick={{ fill: '#e2d5de', fontSize: 10, fontFamily: 'Roboto Mono' }} label={{ value: 'seconds', position: 'insideRight', fill: '#e2d5de', fontSize: 10 }} />
                     <YAxis tick={{ fill: '#dba136', fontSize: 10, fontFamily: 'Roboto Mono' }} width={55} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#250b1f', border: '1px solid #4a1f40', color: '#ffffff', fontFamily: 'Roboto Mono', fontSize: 11, borderRadius: '8px' }}
                       formatter={(val: number) => [`${val} mW`, 'Power Draw']}
                     />
-                    {attackAt !== null && (
-                      <ReferenceLine x={attackAt} stroke="#ef4444" strokeDasharray="4 2" label={{ value: 'attack', fill: '#ef4444', fontSize: 10, position: 'top' }} />
-                    )}
-                    {gateAt !== null && (
-                      <ReferenceLine x={gateAt} stroke="#10b981" strokeDasharray="4 2" label={{ value: 'EnergyGate', fill: '#10b981', fontSize: 10, position: 'top' }} />
-                    )}
+                    {chartMarkers.map((m, i) => (
+                      <ReferenceLine
+                        key={`${m.t}-${i}`}
+                        x={m.t}
+                        stroke={m.isAttack ? '#ef4444' : '#10b981'}
+                        strokeDasharray="4 2"
+                        label={{ value: m.label, fill: m.isAttack ? '#ef4444' : '#10b981', fontSize: 9, position: 'top' }}
+                      />
+                    ))}
                     {status && (
                       <ReferenceLine y={status.baseline_mw} stroke="#dba136" strokeDasharray="6 3" label={{ value: 'baseline', fill: '#dba136', fontSize: 10, position: 'insideTopRight' }} />
                     )}
@@ -763,18 +788,21 @@ export default function Dashboard() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#3d1433" />
-                    <XAxis dataKey="t" tick={{ fill: '#e2d5de', fontSize: 10, fontFamily: 'Roboto Mono' }} label={{ value: 'seconds', position: 'insideRight', fill: '#e2d5de', fontSize: 10 }} />
+                    <XAxis dataKey="t" interval={xTickInterval} tick={{ fill: '#e2d5de', fontSize: 10, fontFamily: 'Roboto Mono' }} label={{ value: 'seconds', position: 'insideRight', fill: '#e2d5de', fontSize: 10 }} />
                     <YAxis tick={{ fill: '#38bdf8', fontSize: 10, fontFamily: 'Roboto Mono' }} width={40} domain={[50, 85]} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#250b1f', border: '1px solid #4a1f40', color: '#ffffff', fontFamily: 'Roboto Mono', fontSize: 11, borderRadius: '8px' }}
                       formatter={(val: number) => [`${val}%`, 'Battery']}
                     />
-                    {attackAt !== null && (
-                      <ReferenceLine x={attackAt} stroke="#ef4444" strokeDasharray="4 2" label={{ value: 'attack', fill: '#ef4444', fontSize: 10, position: 'top' }} />
-                    )}
-                    {gateAt !== null && (
-                      <ReferenceLine x={gateAt} stroke="#10b981" strokeDasharray="4 2" label={{ value: 'EnergyGate', fill: '#10b981', fontSize: 10, position: 'top' }} />
-                    )}
+                    {chartMarkers.map((m, i) => (
+                      <ReferenceLine
+                        key={`${m.t}-${i}`}
+                        x={m.t}
+                        stroke={m.isAttack ? '#ef4444' : '#10b981'}
+                        strokeDasharray="4 2"
+                        label={{ value: m.label, fill: m.isAttack ? '#ef4444' : '#10b981', fontSize: 9, position: 'top' }}
+                      />
+                    ))}
                     <Area type="monotone" dataKey="battery" stroke="#38bdf8" strokeWidth={2} fill="url(#battGrad)" dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>

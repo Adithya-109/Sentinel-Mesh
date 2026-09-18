@@ -61,6 +61,7 @@ export interface EnergySample {
 
 export interface EnergySeries {
   samples: EnergySample[]
+  markers: { ts: number; label: string }[]
 }
 
 export interface ExperimentRow {
