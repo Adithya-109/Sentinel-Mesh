@@ -101,3 +101,27 @@ export interface Experiment {
   running?: { condition: Condition; profile: string; ends_ts: number } | null;
   note?: string;
 }
+
+// -- Detection Channels (channels/*/manifest.json, api/channels.py) ----------
+// Proves the architecture is extensible to a channel beyond email/file without
+// touching MailGuard or FileGuard. Only SMS is a real, trained classifier;
+// everything else is a clearly-labeled dummy with no live classification.
+export interface Channel {
+  id: string;
+  display_name: string;
+  description?: string;
+  status: "active" | "dummy";
+  enabled: boolean;
+  model_path: string | null;
+  vectorizer_path: string | null;
+  metrics: Record<string, unknown>;
+  live_classify: boolean;
+  test_endpoint?: string;   // set on email/file: they use the existing Scan tab, not /classify
+}
+export interface ChannelsResponse { channels: Channel[]; count: number }
+export interface ClassifyResult {
+  channel: string;
+  label: "smishing" | "legitimate";
+  confidence: number;
+  reasons: string[];
+}

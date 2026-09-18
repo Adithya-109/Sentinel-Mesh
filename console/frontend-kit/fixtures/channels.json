@@ -1,0 +1,73 @@
+{
+ "channels": [
+  {
+   "id": "email",
+   "display_name": "Email Guard",
+   "description": "Existing MailGuard classifier, wrapped for the channel registry. Unmodified.",
+   "status": "active",
+   "enabled": true,
+   "model_path": "ml/models/mailguard.joblib",
+   "vectorizer_path": null,
+   "metrics": { "note": "See ml/reports/ for held-out evaluation numbers." },
+   "live_classify": false,
+   "test_endpoint": "/api/scan/email"
+  },
+  {
+   "id": "file",
+   "display_name": "File Guard",
+   "description": "Existing FileGuard classifier, wrapped for the channel registry. Unmodified.",
+   "status": "active",
+   "enabled": true,
+   "model_path": "ml/models/fileguard.joblib",
+   "vectorizer_path": null,
+   "metrics": { "note": "See ml/reports/ for held-out evaluation numbers." },
+   "live_classify": false,
+   "test_endpoint": "/api/scan/file"
+  },
+  {
+   "id": "sms",
+   "display_name": "SMS Guard",
+   "description": "Real, trained smishing classifier: word + character n-gram TF-IDF -> Logistic Regression.",
+   "status": "active",
+   "enabled": true,
+   "model_path": "channels/sms/model.joblib",
+   "vectorizer_path": "channels/sms/vectorizer.joblib",
+   "metrics": { "accuracy": 0.978, "precision_smishing": 0.94, "recall_smishing": 0.92, "auc": 0.99, "threshold": 0.51, "trained_on": "UCI SMS Spam Collection, 5169 msgs after de-dup (1034 held out for this evaluation)" },
+   "live_classify": true
+  },
+  {
+   "id": "whatsapp",
+   "display_name": "WhatsApp Guard",
+   "description": "Illustrates the channel architecture scales to messaging platforms beyond SMS. No model trained.",
+   "status": "dummy",
+   "enabled": true,
+   "model_path": null,
+   "vectorizer_path": null,
+   "metrics": { "accuracy": 0.91, "trained_on": "NOT TRAINED -- placeholder number for demo purposes only" },
+   "live_classify": false
+  },
+  {
+   "id": "telegram",
+   "display_name": "Telegram Guard",
+   "description": "Illustrates the channel architecture scales to messaging platforms beyond SMS. No model trained.",
+   "status": "dummy",
+   "enabled": true,
+   "model_path": null,
+   "vectorizer_path": null,
+   "metrics": { "accuracy": 0.88, "trained_on": "NOT TRAINED -- placeholder number for demo purposes only" },
+   "live_classify": false
+  },
+  {
+   "id": "voice",
+   "display_name": "Voice / Call Transcript Guard",
+   "description": "Illustrates the channel architecture scales to a non-text modality. No model trained.",
+   "status": "dummy",
+   "enabled": false,
+   "model_path": null,
+   "vectorizer_path": null,
+   "metrics": { "accuracy": 0.84, "trained_on": "NOT TRAINED -- placeholder number for demo purposes only" },
+   "live_classify": false
+  }
+ ],
+ "count": 6
+}

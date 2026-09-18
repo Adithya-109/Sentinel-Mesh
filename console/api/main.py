@@ -12,6 +12,12 @@ Console-local (not contract surface -- see contracts/CHANGELOG.md):
     DELETE /events, POST /reset
     v4 (api/v4.py): GET /status, GET/POST /energy, GET /experiment, GET /control,
         POST /mode, POST /attack, POST /experiment/{run,stop,result}
+    channels (api/channels.py): GET /channels, POST /channels/{id}/toggle,
+        POST /classify {channel, text} -- the pluggable "Detection Channels"
+        registry (channels/*/manifest.json). Only SMS Guard is a real, trained
+        classifier; WhatsApp/Telegram/Voice are labeled dummy channels and
+        /classify refuses them. Independent of MailGuard/FileGuard, which
+        keep using /api/scan/{email,file} below, unmodified.
     /api/* (api/frontend.py + v4.py): the same, in frontend-kit/src/types.ts shapes,
         plus POST /api/scan/{email,file}. Built React app served at / if present.
 
@@ -28,7 +34,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import attack, config, correlation, db, energy, frontend, v4, validation
+from . import attack, channels, config, correlation, db, energy, frontend, v4, validation
 
 app = FastAPI(title="SentinelMesh console", version="2.0")
 
@@ -70,6 +76,8 @@ frontend.bind(_conn, store_event)
 app.include_router(v4.router)                      # /status, /energy, ... (root)
 app.include_router(v4.router, prefix="/api")       # same handlers for the React app
 app.include_router(frontend.router, prefix="/api") # /api/events, /api/incidents, /api/scan/*
+app.include_router(channels.router)                 # /channels, /classify (root)
+app.include_router(channels.router, prefix="/api") # same handlers for the React app
 
 TRACE_LABELS = ["normal", "weak_link", "replay", "flood", "impersonation"]
 _SAFE_SESSION = re.compile(r"[^A-Za-z0-9_-]+")

@@ -1,0 +1,39 @@
+{
+  "dataset": "UCI SMS Spam Collection (CC-BY-4.0)",
+  "dataset_url": "https://archive.ics.uci.edu/dataset/228/sms+spam+collection",
+  "total_messages_after_dedup": 5171,
+  "train_size": 3515,
+  "val_size": 621,
+  "test_size": 1035,
+  "threshold": 0.2204,
+  "max_false_alarm_target": 0.03,
+  "held_out_test_metrics": {
+    "accuracy": 0.9729,
+    "precision_smishing": 0.8456,
+    "recall_smishing": 0.9618,
+    "auc": 0.9956,
+    "confusion_matrix": {
+      "true_negative_legit_correct": 881,
+      "false_positive_legit_flagged": 23,
+      "false_negative_smishing_missed": 5,
+      "true_positive_smishing_caught": 126
+    }
+  },
+  "top_global_smishing_ngrams": [
+    "the word/phrase 'numtok' strongly suggests smishing",
+    "the word/phrase 'numtok numtok' strongly suggests smishing",
+    "the word/phrase 'urltok' strongly suggests smishing",
+    "the word/phrase 'call numtok' strongly suggests smishing",
+    "the word/phrase 'to numtok' strongly suggests smishing",
+    "the word/phrase 'text' strongly suggests smishing",
+    "the character pattern '.co' strongly suggests smishing",
+    "the word/phrase 'txt' strongly suggests smishing",
+    "the word/phrase 'reply' strongly suggests smishing",
+    "the character pattern '08' strongly suggests smishing",
+    "the word/phrase 'free' strongly suggests smishing",
+    "the word/phrase 'for' strongly suggests smishing",
+    "the word/phrase 'you have' strongly suggests smishing",
+    "the character pattern '087' strongly suggests smishing",
+    "the word/phrase 'on numtok' strongly suggests smishing"
+  ]
+}

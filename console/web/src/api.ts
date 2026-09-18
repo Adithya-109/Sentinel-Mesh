@@ -1,6 +1,6 @@
 // One place for every call. Set VITE_USE_FIXTURES=1 to develop with no backend running.
 // The live copy the app compiles is console/web/src/api.ts; keep the two identical.
-import type { SmEvent, Incident, Status, EnergySeries, Experiment, Mode, AttackProfile } from "./types";
+import type { SmEvent, Incident, Status, EnergySeries, Experiment, Mode, AttackProfile, ChannelsResponse, ClassifyResult } from "./types";
 
 const USE_FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
@@ -54,6 +54,17 @@ export const api = {
     send("POST", "/experiment/run", { condition, profile, duration_s }),
   stopExperiment: () => send("POST", "/experiment/stop"),
   reset: () => send("POST", "/reset"),
+
+  // Detection Channels: pluggable channel registry (channels/*/manifest.json).
+  channels: () => getJson<ChannelsResponse>("/channels", "channels.json"),
+  toggleChannel: async (id: string) => {
+    if (USE_FIXTURES) return { ok: true, fixture: true };
+    return send("POST", `/channels/${id}/toggle`);
+  },
+  classify: (channel: string, text: string) => {
+    if (USE_FIXTURES) throw new Error("classify is disabled in fixture mode");
+    return send<ClassifyResult>("POST", "/classify", { channel, text });
+  },
 };
 
 // Shared display helpers — keep severity styling in ONE place.

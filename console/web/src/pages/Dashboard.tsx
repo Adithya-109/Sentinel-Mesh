@@ -8,13 +8,13 @@ import SiteHeader from "../components/SiteHeader";
 import type { NavItem } from "../components/SiteHeader";
 import { useEnergy, useEvents, usePoll } from "../data";
 import { ExperimentTable, Scan } from "../experiment";
-import { Controls, GateFeed, Incidents, StatusBar, Timeline } from "../panels";
+import { Controls, DetectionChannels, GateFeed, Incidents, StatusBar, Timeline } from "../panels";
 import { Card } from "../ui";
 import "../dashboard.css";
 
 const FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";
 
-type Tab = "overview" | "events" | "incidents" | "energy" | "experiment" | "scan";
+type Tab = "overview" | "events" | "incidents" | "energy" | "experiment" | "scan" | "channels";
 const TABS: { id: Tab; label: string; title: string; sub: string }[] = [
   { id: "overview", label: "Overview", title: "Overview", sub: "The link, the battery and every EnergyGate decision, live." },
   { id: "events", label: "Events", title: "Events", sub: "Everything the four detection layers have reported, newest first." },
@@ -22,6 +22,7 @@ const TABS: { id: Tab; label: string; title: string; sub: string }[] = [
   { id: "energy", label: "Energy", title: "Energy", sub: "Live 1 s samples from the INA219 monitor. Markers show when the controls changed." },
   { id: "experiment", label: "Experiment", title: "Experiment", sub: "One run per condition, same attack profile (brief v4 section 6)." },
   { id: "scan", label: "Scan", title: "Scan", sub: "The console calls the ML service and stores the verdict. Benign files only, never live malware." },
+  { id: "channels", label: "Channels", title: "Channels", sub: "A pluggable registry: adding a channel is a folder under channels/, not a code change. Only SMS is a trained model; the rest are labelled demos." },
 ];
 
 const asTab = (v: string | null): Tab => (TABS.some(t => t.id === v) ? (v as Tab) : "overview");
@@ -35,8 +36,9 @@ export default function Dashboard() {
   const experiment = usePoll(() => api.experiment(profile), 3000);
   const { events, error: evError, resync } = useEvents();
   const { series, resync: resyncEnergy } = useEnergy();
+  const channels = usePoll(api.channels, 5000);
 
-  const refreshAll = () => { status.refresh(); incidents.refresh(); experiment.refresh(); resync(); resyncEnergy(); };
+  const refreshAll = () => { status.refresh(); incidents.refresh(); experiment.refresh(); resync(); resyncEnergy(); channels.refresh(); };
   const simulated = !!status.data?.simulated || !!series.simulated;
   const down = status.error !== null;
   const incidentBadge = incidents.data?.filter(i => i.severity === "critical" || i.severity === "high").length ?? 0;
@@ -106,6 +108,10 @@ export default function Dashboard() {
         )}
 
         {tab === "scan" && <Scan onStored={refreshAll} bare />}
+
+        {tab === "channels" && (
+          <DetectionChannels channels={channels.data?.channels ?? null} error={channels.error} onChange={refreshAll} bare />
+        )}
       </main>
 
       <SiteFooter />
