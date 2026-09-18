@@ -30,8 +30,13 @@ ML_REPORTS = os.environ.get(
     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "ml", "reports"),
 )
 
-st.set_page_config(page_title="SentinelMesh console", page_icon="+", layout="wide")
+st.set_page_config(page_title="SentinelMesh console", page_icon="\U0001F6E1", layout="wide")
 st.markdown(theme.CSS, unsafe_allow_html=True)
+
+# Event types that fire constantly by design (EnergyGate scores every single
+# handshake attempt) and were never meant to be read one-by-one -- they flood
+# the live feed without being alerts. Shown as a count, not a wall of rows.
+ROUTINE_TYPES = {"gate_decision"}
 
 
 # -- API helpers -----------------------------------------------------------
@@ -113,7 +118,7 @@ def severity_tiles(events: list[dict]) -> None:
     counts = {s: 0 for s in theme.SEVERITY_ORDER}
     for e in events:
         counts[e["severity"]] = counts.get(e["severity"], 0) + 1
-    cols = st.columns(len(theme.SEVERITY_ORDER))
+    cols = st.columns(len(theme.SEVERITY_ORDER), gap="small")
     for col, sev in zip(cols, theme.SEVERITY_ORDER):
         with col:
             st.markdown(theme.tile(counts.get(sev, 0), f"{sev} events", sev), unsafe_allow_html=True)
@@ -121,7 +126,7 @@ def severity_tiles(events: list[dict]) -> None:
 
 def chain_strip(chain: list[dict]) -> None:
     """Inbox -> Endpoint -> Field network -> Physical, lighting up as layers fire."""
-    cols = st.columns([3, 1, 3, 1, 3, 1, 3])
+    cols = st.columns([3, 1, 3, 1, 3, 1, 3], gap="small")
     for i, step in enumerate(chain):
         with cols[i * 2]:
             cls = "sm-step lit" if step["lit"] else "sm-step"
@@ -141,15 +146,18 @@ def page_timeline():
         st.caption("Start it with:  uvicorn api.main:app --port 8000")
         return
 
-    events = data["events"]
-    if not events:
+    all_events = data["events"]
+    if not all_events:
         st.info("No events yet. Run `python tools/mock_events.py` to replay the demo story.")
         return
+
+    routine = [e for e in all_events if e["type"] in ROUTINE_TYPES]
+    events = [e for e in all_events if e["type"] not in ROUTINE_TYPES]
 
     severity_tiles(events)
     st.write("")
 
-    left, right = st.columns([1, 1])
+    left, right = st.columns([1, 1], gap="large")
     with left:
         layers = st.multiselect("layer", ["mail", "file", "field", "tamper"], default=[])
     with right:
@@ -161,17 +169,13 @@ def page_timeline():
              if (not layers or e["layer"] in layers)
              and severity_rank(e["severity"]) >= severity_rank(min_sev)]
 
-    st.caption(f"{len(shown)} of {len(events)} events &middot; newest first")
+    st.caption(f"{len(shown)} of {len(events)} alerts &middot; newest first")
     html = "".join(event_row(e) for e in reversed(shown))
     st.markdown(html, unsafe_allow_html=True)
 
-    with st.expander("table view"):
-        st.dataframe(
-            [{"time": fmt_date(e["ts"]), "layer": e["layer"], "type": e["type"],
-              "severity": e["severity"], "score": e.get("score"), "node": e.get("node"),
-              "technique": e.get("technique"), "summary": e["summary"]} for e in reversed(shown)],
-            use_container_width=True, hide_index=True,
-        )
+    if routine:
+        with st.expander(f"{len(routine)} routine EnergyGate decisions (not alerts, hidden by default)"):
+            st.markdown("".join(event_row(e) for e in reversed(routine)), unsafe_allow_html=True)
 
 
 def page_incidents():
@@ -190,29 +194,31 @@ def page_incidents():
         return
 
     for inc in incidents:
-        head = (f'{theme.chip(inc["severity"])} &nbsp; **{inc["title"]}** '
-                f'&nbsp;<span style="color:var(--sm-muted)">{fmt_date(inc["started_ts"])} '
-                f'&middot; {inc["event_count"]} alerts &middot; {len(inc["layers"])} layers</span>')
-        st.markdown(head, unsafe_allow_html=True)
-        chain_strip(inc["chain"])
+        with st.container(border=True):
+            head = (f'{theme.chip(inc["severity"])} &nbsp; **{inc["title"]}** '
+                    f'&nbsp;<span style="color:var(--sm-muted)">{fmt_date(inc["started_ts"])} '
+                    f'&middot; {inc["event_count"]} alerts &middot; {len(inc["layers"])} layers</span>')
+            st.markdown(head, unsafe_allow_html=True)
+            st.write("")
+            chain_strip(inc["chain"])
 
-        if inc["escalated_by"]:
-            st.markdown(
-                '<div class="sm-why"><b>Why this severity:</b> base '
-                f'{inc["base_severity"]} &rarr; {inc["severity"]} &mdash; '
-                + "; ".join(inc["escalated_by"]) + "</div>",
-                unsafe_allow_html=True,
-            )
-        if inc["technique_names"]:
-            st.markdown(" ".join(f'<span class="sm-tech">{t}</span>' for t in inc["technique_names"]),
-                        unsafe_allow_html=True)
+            if inc["escalated_by"]:
+                st.markdown(
+                    '<div class="sm-why"><b>Why this severity:</b> base '
+                    f'{inc["base_severity"]} &rarr; {inc["severity"]} &mdash; '
+                    + "; ".join(inc["escalated_by"]) + "</div>",
+                    unsafe_allow_html=True,
+                )
+            if inc["technique_names"]:
+                st.markdown(" ".join(f'<span class="sm-tech">{t}</span>' for t in inc["technique_names"]),
+                            unsafe_allow_html=True)
 
-        with st.expander(f"timeline and why ({inc['event_count']} alerts)", expanded=inc is incidents[0]):
-            for e in inc["events"]:
-                st.markdown(event_row(e), unsafe_allow_html=True)
-                why_panel(e)
-                st.write("")
-        st.divider()
+            with st.expander(f"timeline and why ({inc['event_count']} alerts)", expanded=inc is incidents[0]):
+                for e in inc["events"]:
+                    st.markdown(event_row(e), unsafe_allow_html=True)
+                    why_panel(e)
+                    st.write("")
+        st.write("")
 
 
 def page_scan():
@@ -355,15 +361,6 @@ def page_evidence():
     charts_dir = os.path.join(ML_REPORTS, "charts")
     metrics_path = os.path.join(ML_REPORTS, "metrics.json")
 
-    if os.path.isdir(charts_dir):
-        pngs = sorted(f for f in os.listdir(charts_dir) if f.endswith(".png"))
-        for name in pngs:
-            st.image(os.path.join(charts_dir, name), caption=name, use_container_width=True)
-        if not pngs:
-            st.caption("No charts yet -- the ML stream writes them with reports/make_charts.py.")
-    else:
-        st.caption(f"No charts directory at {charts_dir}.")
-
     if os.path.exists(metrics_path):
         with open(metrics_path, encoding="utf-8") as f:
             metrics = json.load(f)
@@ -371,25 +368,44 @@ def page_evidence():
         file_ = metrics.get("fileguard", {})
         loco = mail.get("email_leave_one_corpus_out", {})
         accs = [v["acc"] for v in loco.values() if "acc" in v]
+        det = file_.get("malware_group_split_final", {}).get("detection_at_0p1pct_false_alarm")
 
-        c1, c2, c3 = st.columns(3)
-        random_acc = mail.get("email_random_split_baseline", {}).get("acc")
+        # Only the honest numbers get a tile here. The flattering random-split
+        # score exists in metrics.json too, but the project's own rule is not
+        # to quote it -- so it doesn't get to be the thing an operator sees first.
+        c1, c2 = st.columns(2, gap="medium")
         with c1:
-            st.metric("MailGuard, random split", f"{random_acc:.1%}" if random_acc else "-",
-                      help="The flattering number. Quote the held-out one instead.")
+            st.markdown(
+                theme.tile(f"{min(accs):.1%}-{max(accs):.1%}" if accs else "-",
+                           "MailGuard &middot; held-out corpus accuracy", "info"),
+                unsafe_allow_html=True,
+            )
         with c2:
-            st.metric("MailGuard, held-out corpus",
-                      f"{min(accs):.1%}-{max(accs):.1%}" if accs else "-",
-                      help="Leave-one-corpus-out: the honest generalisation number.")
-        with c3:
-            det = file_.get("malware_group_split_final", {}).get("detection_at_0p1pct_false_alarm")
-            st.metric("FileGuard @ 0.1% false alarms", f"{det:.1%}" if det else "-",
-                      help="Detection at a fixed low false-alarm rate, not accuracy.")
+            st.markdown(
+                theme.tile(f"{det:.1%}" if det else "-",
+                           "FileGuard &middot; detection @ 0.1% false alarms", "info"),
+                unsafe_allow_html=True,
+            )
+        st.write("")
 
         with st.expander("full metrics.json"):
             st.json(metrics)
     else:
         st.caption(f"No metrics.json at {metrics_path}.")
+
+    st.write("")
+    if os.path.isdir(charts_dir):
+        pngs = sorted(f for f in os.listdir(charts_dir) if f.endswith(".png"))
+        if pngs:
+            cols = st.columns(len(pngs), gap="medium")
+            for col, name in zip(cols, pngs):
+                with col:
+                    with st.container(border=True):
+                        st.image(os.path.join(charts_dir, name), use_container_width=True)
+        else:
+            st.caption("No charts yet -- the ML stream writes them with reports/make_charts.py.")
+    else:
+        st.caption(f"No charts directory at {charts_dir}.")
 
 
 # -- shell -----------------------------------------------------------------
@@ -405,6 +421,7 @@ PAGES = {
 with st.sidebar:
     st.title("SentinelMesh")
     st.caption("Attack-chain console")
+    st.write("")
     choice = st.radio("Page", list(PAGES), label_visibility="collapsed")
     st.divider()
 
@@ -415,15 +432,17 @@ with st.sidebar:
         st.error("console API down")
         st.code("uvicorn api.main:app --port 8000", language="bash")
 
-    if st.checkbox("Auto-refresh (3s)", value=False):
+    col_a, col_b = st.columns(2, gap="small")
+    with col_a:
+        auto_refresh = st.checkbox("Auto-refresh", value=False)
+    with col_b:
+        if st.button("Refresh", use_container_width=True):
+            st.rerun()
+    if auto_refresh:
         time.sleep(3)
-        st.rerun()
-    if st.button("Refresh now", use_container_width=True):
         st.rerun()
 
     st.divider()
-    st.caption(f"console {CONSOLE_URL}")
-    st.caption(f"ML {ML_URL}")
+    st.caption(f"console &middot; {CONSOLE_URL}  \nML service &middot; {ML_URL}")
 
-st.markdown("### SentinelMesh attack-chain console")
 PAGES[choice]()
