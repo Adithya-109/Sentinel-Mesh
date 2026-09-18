@@ -11,6 +11,89 @@ against everything built in the first pass. One real bug was found and
 fixed (see below); everything else was either already consistent or has
 been tightened up with v2's specifics.
 
+**Update (v4, docs/v4_energy_split.md):** brief v4 adds EnergyGate (a
+learned admission gatekeeper in front of the handshake) and a measured
+energy budget across all 3 streams. Firmware's slice — see "v4 energy
+work" below — is built and host-tested where it can be (cookie challenge,
+energy token bucket, EnergyGate rule-based stand-in); the Monitor board
+(INA219 rig) and the gateway wiring are structural/ESP32-only, same
+"compiles, not yet flashed" status as everything else pre-hardware.
+**Note:** this batch was written during a sandbox outage that also took
+down the host-test runner (`tools/run_native_tests.sh`) partway through —
+every new/changed line was manually re-traced against the test assertions
+and the file contents re-verified end to end, but nobody has actually run
+`g++` on it yet. Run `tools/run_native_tests.sh` as the very first thing
+after pulling this and before building on top of it.
+
+## v4 energy work (docs/v4_energy_split.md)
+
+Firmware's slice, in the order it was built:
+
+1. **Cookie challenge** (`lib/sentinel_proto/cookie.h`) — stateless
+   DTLS-style return-routability cookie: an 8-byte value derived from a
+   secret + sender id + time window, verified without the gateway storing
+   anything. Host-tested (7 new assertions): determinism, sender/secret
+   separation, window-boundary tolerance, rejection outside that window.
+   Not yet wired into a real send/verify round trip — there's no wire slot
+   for it until the actual HELLO/RESPONSE messages exist (brief v2 6.2),
+   so `on_mesh_packet()`'s CHALLENGE branch generates a cookie but doesn't
+   send it yet; that's the next step once the handshake is real.
+2. **Energy token bucket** (`lib/sentinel_proto/energy_budget.h`) — joules,
+   refills over time, `spend`/`can_afford`/`credit`. Host-tested (10 new
+   assertions): default/explicit/clamped initial balance, spend
+   success/failure, refill math and its capacity clamp, `can_afford` not
+   mutating state, the `exhausted()` edge.
+3. **EnergyGate rule-based stand-in** (`lib/sentinel_proto/energygate.h`,
+   `energygate_score()`) — same pattern as `field_model.h`'s
+   `classify_window()`: a placeholder with the exact signature Claude 1's
+   real `ml/export/energygate.h` will export, so the gateway call site
+   doesn't change when that lands. Host-tested (3 new assertions): a
+   healthy-looking sender scores high, a flooding one scores low, output
+   stays in [0,1] at extreme inputs.
+4. **Gateway wiring** (`src/gateway/main.cpp`) — every incoming `HELLO`
+   now runs EnergyGate *before* any signature-verification work: builds
+   the 8-feature vector from this window's counters, scores it, spends
+   from the token bucket (or challenges, or drops) based on
+   `GATE_SPEND_THRESHOLD`/`GATE_CHALLENGE_THRESHOLD`, and emits a
+   `gate_decision` EVT with `details.action` and the model's probability
+   in the Event's top-level `score` (per the corrected contract shape —
+   **not** duplicated into `details`). `budget_exhausted` fires once,
+   edge-triggered, when the bucket hits zero. `energy_alert` is
+   implemented (severity scales with draw-vs-baseline ratio) but has no
+   live call site yet — no data path from the Monitor board to the
+   gateway exists until the energy rig is actually wired up.
+5. **Trace v4 fields** (`lib/sentinel_proto/trace.h`) — `frag_complete_pct`
+   and `dup_pct` are now tracked and always emitted (computable from
+   counters the gateway already keeps); `battery_pct` stays omitted until
+   the DATA payload decrypt path exists to actually read it from the field
+   node, rather than writing a fake value.
+6. **Energy rig** (`src/monitor/main.cpp`, `env:monitor` in
+   `platformio.ini`) — the 4th ("Monitor") ESP32: INA219 over I2C at
+   ~1kHz (the chip's real achievable rate at default resolution, not
+   exactly 1000.0 Hz — documented in the file), watching a GPIO marker
+   pin shared with the board under test. Prints
+   `monitor,op_<n>,<us>,<mJ>,<peak_mA>` per marked interval; correlate
+   with `src/benchmark`'s own CSV by run order. Structural only — no
+   INA219 board or second ESP32 available to build against.
+7. **Attacker slow-drip profile** (`src/attacker/main.cpp`,
+   `MODE SLOW_DRIP`) — ~1 handshake/min, reusing `tick_flood()`'s packet
+   construction at a cadence deliberately too slow to trip
+   `classify_window()`'s FLOOD threshold. The point (brief section 6):
+   demonstrates why a plain rate limit misses this and EnergyGate's
+   budget-over-time view is needed instead.
+
+**Still open from `docs/v4_energy_split.md`**, not attempted this round
+(need real hardware or a team decision first):
+- The `mode`/`attack` serial line format for the new frontend's `POST
+  /mode`/`POST /attack` — coordinate with Claude 2, who owns the freeze;
+  `handle_console_line()` has a TODO marking where it goes.
+- `PLACEHOLDER_HANDSHAKE_COST_J` / `ENERGY_BUDGET_CAPACITY_J` /
+  `ENERGY_BUDGET_REFILL_J_PER_S` in `gateway/main.cpp` are guesses — the
+  5-row experiment and real cost table wait on the energy rig existing on
+  real boards.
+- Radio fingerprinting (stretch, brief's own cut order puts it first to
+  cut) — not started.
+
 ## Status as of this milestone
 
 Done and **verified** (175/175 host-side assertions pass, see below):
@@ -107,7 +190,7 @@ same fallback brief v2's build plan names for hours 9-12.
 ```
 firmware/
   platformio.ini          3 hardware envs (field_node, gateway, attacker)
-                           + benchmark env + native (host test) env
+                           + benchmark env + env:monitor (v4) + native (host test) env
   lib/sentinel_proto/      shared protocol code
     include/sentinel_proto/
       types.h              NodeId, MsgType, KemLevel enums
@@ -116,18 +199,22 @@ firmware/
       replay.h                 64-bit sliding window + freshness check (32-bit seq)
       field_model.h              rule-based classify_window() stand-in
       event.h                     EVT line builder (ArduinoJson, ESP32-only)
-      trace.h                      TRC line builder (ArduinoJson, ESP32-only)
+      trace.h                      TRC line builder (ArduinoJson, ESP32-only; v4 fields)
       auth_fallback.h                HMAC-PSK fallback if ML-DSA doesn't fit
+      cookie.h                        v4: DTLS-style handshake-flood cookie
+      energy_budget.h                  v4: EnergyGate's joule token bucket
+      energygate.h                      v4: rule-based energygate_score() stand-in
     src/                     .cpp for each of the above
   src/
     common/
-      board_config.h          shared pin map (2 real nodes' worth of sensors/indicators)
+      board_config.h          shared pin map (2 real nodes' worth of sensors/indicators + v4 energy-marker pin)
       status_indicators.h      shared RGB LED + buzzer helper (field_node + gateway)
     field_node/main.cpp        field node ("Node A") entry point
-    gateway/main.cpp            gateway ("Node B") entry point
-    attacker/main.cpp            attacker (red-team) entry point
+    gateway/main.cpp            gateway ("Node B") entry point -- now runs EnergyGate per HELLO (v4)
+    attacker/main.cpp            attacker (red-team) entry point -- now has MODE SLOW_DRIP (v4)
     benchmark/main.cpp            crypto benchmark sketch (PQC + classical baseline)
-  test/test_native/test_main.cpp  host-side unit tests (packet/fragment/replay/field_model)
+    monitor/main.cpp               v4: INA219 energy-rig entry point (4th board)
+  test/test_native/test_main.cpp  host-side unit tests (packet/fragment/replay/field_model/cookie/energy_budget/energygate)
   tools/run_native_tests.sh         g++ build+run helper for the above
 ```
 
@@ -151,13 +238,18 @@ cd firmware
 tools/run_native_tests.sh
 ```
 
-Last run: **175 passed, 0 failed**, clean build (`-Wall -Wextra`, no warnings).
-Covers `PacketHeader` serialize/deserialize (including rejecting bad
-version/type/frag bounds and short buffers), `Fragmenter`/`Reassembler`
-(in-order, out-of-order, duplicate fragments, timeout eviction, stream-table
-cap), `ReplayFilter` (accept/duplicate/replay-rejected/stale-timestamp,
-per-peer independence, reset on rehandshake), and `classify_window()`
-(one case per class).
+Last confirmed-green run (pre-v4): **175 passed, 0 failed**, clean build
+(`-Wall -Wextra`, no warnings). Covers `PacketHeader` serialize/deserialize
+(including rejecting bad version/type/frag bounds and short buffers),
+`Fragmenter`/`Reassembler` (in-order, out-of-order, duplicate fragments,
+timeout eviction, stream-table cap), `ReplayFilter`
+(accept/duplicate/replay-rejected/stale-timestamp, per-peer independence,
+reset on rehandshake), and `classify_window()` (one case per class).
+
+v4 adds 20 more assertions (7 cookie, 10 energy budget, 3 EnergyGate) --
+manually re-traced against the implementation but **not yet re-run through
+g++** (written during a sandbox outage, see the v4 update note above). Run
+this before relying on the v4 pieces.
 
 ## Crypto benchmark
 
