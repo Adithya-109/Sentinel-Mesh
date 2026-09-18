@@ -86,6 +86,11 @@ def test_unknown_severity_is_rejected():
     assert "severity" in r.json()["errors"][0]
 
 
+def test_suspicious_email_event_is_accepted_with_no_reasons():
+    e = event(type="email_suspicious", severity="medium", score=0.55, reasons=[])
+    assert client.post("/events", json=e).status_code == 201
+
+
 def test_type_must_match_its_layer():
     """A mail event carrying a field type is exactly the drift we want caught."""
     r = client.post("/events", json=event(layer="mail", type="replay_rejected"))

@@ -5,11 +5,11 @@ are wired up, so this posts the five-beat story from brief v3 section 10 --
 phishing email -> malicious attachment -> replay -> impersonation -> case
 opened -- straight to the console API with realistic gaps between beats.
 
-The `reasons` strings are verbatim output of the real detectors'
-`ml/sentinel_ml/reasons.py` (humanize_mail_reason / humanize_file_reason) for
-these tokens and features, so the Why panel looks the same whether an event
-came from here or from the real ML service. If the ML stream changes that
-phrasing again, regenerate these rather than hand-editing them.
+The file `reasons` strings are verbatim output of the real detector's
+`ml/sentinel_ml/reasons.py` (humanize_file_reason) for these features, so the
+Why panel looks the same whether an event came from here or from the real ML
+service. If the ML stream changes that phrasing again, regenerate these rather
+than hand-editing them. Mail events carry no reasons, like the real MailGuard.
 
     python tools/mock_events.py                 # full story, demo pacing
     python tools/mock_events.py --speed 10      # 10x faster, for development
@@ -41,8 +41,7 @@ STORY = [
         "layer": "mail", "type": "email_clean", "severity": "info", "score": 0.03,
         "node": None, "technique": None,
         "summary": "Email looks clean",
-        "reasons": ["the word 'meeting' moderately suggests legitimate",
-                    "the word 'attached agenda' slightly suggests legitimate"],
+        "reasons": [],
         "details": {"subject": "Re: Tuesday maintenance window", "from": "ops@grid-utility.example"},
     }, "background traffic: an ordinary email scores clean"),
 
@@ -58,11 +57,7 @@ STORY = [
         "layer": "mail", "type": "email_malicious", "severity": "high", "score": 0.981,
         "node": None, "technique": "T1566.001",
         "summary": "Malicious email detected",
-        "reasons": [
-            "urgency language ('urgent') -- moderately suggests phishing",
-            "the word 'verify your account' moderately suggests phishing",
-            "the word 'click numtok' moderately suggests phishing",
-        ],
+        "reasons": [],
         "details": {"subject": "URGENT: substation access review - action required",
                     "from": "it-security@grid-utillty.example",
                     "attachment": "SCADA_access_review.exe"},

@@ -24,7 +24,7 @@
     "type": {
       "type": "string",
       "enum": [
-        "email_malicious", "email_clean",
+        "email_malicious", "email_suspicious", "email_clean",
         "file_malicious", "file_clean",
         "replay_rejected", "handshake_rejected", "attack_detected",
         "link_degraded", "rekey",
@@ -67,7 +67,7 @@
     {
       "$comment": "layer <-> type consistency (CONTRACT.md's event table)",
       "if": {"properties": {"layer": {"const": "mail"}}, "required": ["layer"]},
-      "then": {"properties": {"type": {"enum": ["email_malicious", "email_clean"]}}}
+      "then": {"properties": {"type": {"enum": ["email_malicious", "email_suspicious", "email_clean"]}}}
     },
     {
       "if": {"properties": {"layer": {"const": "file"}}, "required": ["layer"]},

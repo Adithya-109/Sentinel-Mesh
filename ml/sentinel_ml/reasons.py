@@ -1,10 +1,10 @@
-"""Plain-English phrasing for Event.reasons.
+"""Plain-English phrasing for FileGuard's Event.reasons.
 
-Maps the 54 raw PE feature names (FileGuard) and a curated list of
-phishing/legit cue words (MailGuard) to short human descriptions, so the
+Maps the 54 raw PE feature names to short human descriptions, so the
 console's "why" panel can show something a non-ML analyst can read
 instead of a bare coefficient. Falls back to the raw name for anything
-not in the map -- these lists are illustrative, not exhaustive.
+not in the map. MailGuard emits no reasons: it reports a score and a
+clean / suspicious / malicious verdict only.
 """
 
 # -- FileGuard: the 54 PE header features (see sentinel_ml/pe_features.py)
@@ -64,51 +64,6 @@ FILE_FEATURE_DESCRIPTIONS = {
     "LoadConfigurationSize": "size of the load-configuration structure",
     "VersionInformationSize": "amount of version info present (legit software is usually well-populated)",
 }
-
-# -- MailGuard: placeholder tokens + a curated list of common phishing/legit
-# cue words. Anything else falls back to the raw token.
-PLACEHOLDER_WORD_DESCRIPTIONS = {
-    "urltok": "contains a link",
-    "emailtok": "contains an email address",
-    "numtok": "contains a number",
-}
-
-WORD_DESCRIPTIONS = {
-    "urgent": "urgency language ('urgent')",
-    "immediately": "urgency language ('immediately')",
-    "verify": "asks you to verify something",
-    "suspend": "threatens suspension",
-    "suspended": "claims an account is suspended",
-    "password": "mentions a password",
-    "click": "asks you to click something",
-    "account": "mentions 'account'",
-    "confirm": "asks you to confirm something",
-    "login": "mentions logging in",
-    "log in": "mentions logging in",
-    "winner": "claims you've won something",
-    "congratulations": "congratulatory bait language",
-    "free": "'free' offer language",
-    "limited": "artificial scarcity language ('limited')",
-    "bitcoin": "mentions cryptocurrency payment",
-    "wire": "mentions a wire transfer",
-    "gift card": "asks for gift cards (a common scam payment method)",
-    "ssn": "asks for a social security number",
-    "bank": "mentions banking details",
-    "invoice": "mentions an invoice/payment",
-    "thanks": "casual sign-off, common in legitimate mail",
-    "wrote": "reply/quote language, common in legitimate threads",
-    "enron": "Enron corpus internal-mail marker (dataset artifact, not a real signal)",
-}
-
-
-def humanize_mail_reason(token: str, contrib: float) -> str:
-    direction = "phishing" if contrib > 0 else "legitimate"
-    strength = "strongly" if abs(contrib) > 1.0 else "moderately" if abs(contrib) > 0.4 else "slightly"
-    phrase = WORD_DESCRIPTIONS.get(token) or PLACEHOLDER_WORD_DESCRIPTIONS.get(token)
-    if phrase:
-        return f"{phrase} -- {strength} suggests {direction}"
-    return f"the word '{token}' {strength} suggests {direction}"
-
 
 _HEX_FEATURES = {"ImageBase", "DllCharacteristics", "Characteristics", "Machine"}
 

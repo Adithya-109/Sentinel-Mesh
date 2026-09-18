@@ -38,6 +38,13 @@ def test_info_events_are_excluded_from_an_incident_they_neighbour():
     assert incidents[0]["events"][0]["type"] == "email_malicious"
 
 
+def test_suspicious_email_is_an_alert_not_informational():
+    """email_suspicious is medium, so R1 does not drop it: it opens an incident."""
+    incidents = build_incidents([ev(0, "mail", "email_suspicious", "medium", technique="T1566.001")])
+    assert len(incidents) == 1
+    assert incidents[0]["severity"] == "medium"
+
+
 # -- R2: sliding window ----------------------------------------------------
 
 def test_alerts_inside_the_window_are_one_incident():

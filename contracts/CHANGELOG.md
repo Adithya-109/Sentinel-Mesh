@@ -5,6 +5,29 @@ streams.** Entries are newest first.
 
 ---
 
+## 2026-09-19 — MailGuard: clean / suspicious / malicious, and no reasons
+
+**Console (Claude 2), ML (Claude 1), firmware (Claude 3): read this.** One new
+event type; firmware is unaffected (boards never emit `mail` events).
+
+**What changed.**
+- New event type **`email_suspicious`** on layer `mail`: severity `medium`,
+  technique `T1566.001`. Added to `event.schema.json` (type enum and the mail
+  layer rule), the `types.ts` union (`web/` and `frontend-kit/`, kept identical)
+  and the CONTRACT.md table.
+- MailGuard now buckets its score into three bands: `< 0.40` -> `email_clean`
+  (info), `0.40 .. < 0.75` -> `email_suspicious` (medium), `>= 0.75` ->
+  `email_malicious` (high). The model is unchanged; the old single cut
+  (~0.51, tuned for <=2% false alarms) is no longer what the service alerts on.
+- MailGuard events carry **no `reasons`** (`[]`); they report a score and a
+  verdict only. FileGuard still emits its SHAP reasons.
+
+**Correlation.** `email_suspicious` is severity `medium`, so R1 does not
+exclude it: like any non-info alert it can open or join an incident and count as
+a `mail` layer hit for R4/R5. `email_clean` (info) still never does.
+
+---
+
 ## 2026-09-18 — EnergyGate moves from the gateway to field-1
 
 **Firmware (Claude 3) and ML (Claude 1): read this.** No serial line format,

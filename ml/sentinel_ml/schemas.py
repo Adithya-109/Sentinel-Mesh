@@ -23,17 +23,26 @@ class Event(BaseModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
-def mail_event(is_malicious: bool, score: float, reasons: list[str], node: Optional[str] = None,
+_MAIL_VERDICTS = {
+    # verdict: (type, severity, technique, summary)
+    "clean": ("email_clean", "info", None, "Email looks clean"),
+    "suspicious": ("email_suspicious", "medium", "T1566.001", "Suspicious email"),
+    "malicious": ("email_malicious", "high", "T1566.001", "Malicious email detected"),
+}
+
+
+def mail_event(verdict: str, score: float, node: Optional[str] = None,
                details: Optional[dict] = None) -> Event:
+    """MailGuard event for a 'clean' / 'suspicious' / 'malicious' verdict. No reasons: score only."""
+    type_, severity, technique, summary = _MAIL_VERDICTS[verdict]
     return Event(
         layer="mail",
-        type="email_malicious" if is_malicious else "email_clean",
-        severity="high" if is_malicious else "info",
+        type=type_,
+        severity=severity,
         score=score,
         node=node,
-        technique="T1566.001" if is_malicious else None,
-        summary="Malicious email detected" if is_malicious else "Email looks clean",
-        reasons=reasons,
+        technique=technique,
+        summary=summary,
         details=details or {},
     )
 

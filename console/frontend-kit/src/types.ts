@@ -12,7 +12,7 @@ export type Layer = "mail" | "file" | "field" | "tamper";
 export type Severity = "info" | "low" | "medium" | "high" | "critical";
 
 export type EventType =
-  | "email_malicious" | "email_clean"
+  | "email_malicious" | "email_suspicious" | "email_clean"
   | "file_malicious" | "file_clean"
   | "replay_rejected" | "handshake_rejected" | "attack_detected" | "link_degraded" | "rekey"
   | "gate_decision" | "energy_alert" | "budget_exhausted"

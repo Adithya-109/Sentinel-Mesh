@@ -110,7 +110,7 @@ def main():
             failed += 1
             continue
 
-        actual_malicious = event["type"] in ("email_malicious", "file_malicious")
+        actual_malicious = event["type"] in ("email_malicious", "email_suspicious", "file_malicious")
         ok = actual_malicious == e["expected_malicious"]
         passed += ok
         failed += not ok

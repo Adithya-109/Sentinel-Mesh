@@ -102,7 +102,7 @@ purpose: `curl -X DELETE http://127.0.0.1:8000/experiment`.
 collection the model has never seen."
 
 1. **Scan** card → paste `ml/demo/emails/malicious_1.txt` → **Scan email**.
-   Point at the verdict and its three reasons, in plain English.
+   Point at the verdict (clean / suspicious / malicious) and its score.
 2. Paste `malicious_1_padded.txt` (same email with ordinary text stapled on).
    **Say:** "Padding like this dropped the baseline model to 16%. The shipped
    model is adversarially trained, so it still catches it."

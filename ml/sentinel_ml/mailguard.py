@@ -11,10 +11,25 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, roc_curve
 from sklearn.model_selection import train_test_split
 
 from .data import EMAIL_CORPORA, load_emails
-from .reasons import humanize_mail_reason
 from .text import normalize_text
 
 SEED = 42
+
+# Three-tier verdict on the risk score (0 = safe, 1 = clearly malicious).
+# The trained model is unchanged; these bands only decide what the score is
+# called. `threshold` saved with the model (tuned for <=2% false alarms) is the
+# older binary cut and is no longer what the service alerts on.
+SUSPICIOUS_AT = 0.40
+MALICIOUS_AT = 0.75
+
+
+def verdict(score: float) -> str:
+    """'clean' below 0.40, 'suspicious' from 0.40 up to 0.75, 'malicious' from 0.75."""
+    if score >= MALICIOUS_AT:
+        return "malicious"
+    if score >= SUSPICIOUS_AT:
+        return "suspicious"
+    return "clean"
 
 
 def build_vectorizer() -> TfidfVectorizer:
@@ -76,19 +91,6 @@ def interleave_with_legit(texts, legit_pool, rng, pieces=4):
         parts = [" ".join(p) for p in np.array_split(np.array(t.split() or [""]), pieces)]
         out.append(f" {rng.choice(legit_pool)} ".join(parts))
     return np.array(out)
-
-
-def explain(vec, model, text, top_k=3):
-    """Top-k tokens (by |coef * tfidf|) that drove the score, signed."""
-    x = vec.transform([text])
-    coef = model.coef_[0]
-    idx = x.nonzero()[1]
-    if len(idx) == 0:
-        return []
-    contrib = np.asarray(x[0, idx].todense()).ravel() * coef[idx]
-    order = np.argsort(-np.abs(contrib))[:top_k]
-    fn = vec.get_feature_names_out()
-    return [humanize_mail_reason(fn[idx[p]], float(contrib[p])) for p in order]
 
 
 def train(security_root: str, max_false_alarm: float = 0.02, seed: int = SEED):

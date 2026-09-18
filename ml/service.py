@@ -54,9 +54,7 @@ def health():
 
 def _score_email_text(text: str, details: dict = None) -> Event:
     score = float(mailguard.predict_proba(_mail["vectorizer"], _mail["model"], [text])[0])
-    is_malicious = score >= _mail["threshold"]
-    reasons = mailguard.explain(_mail["vectorizer"], _mail["model"], text)
-    return mail_event(is_malicious, score, reasons, details=details or {})
+    return mail_event(mailguard.verdict(score), score, details=details or {})
 
 
 def _extract_pe_bytes(data: bytes, suffix: str) -> dict:

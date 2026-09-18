@@ -13,7 +13,7 @@
 
 | layer  | type                                             | technique  | severity |
 |--------|--------------------------------------------------|------------|----------|
-| mail   | email_malicious / email_clean                    | T1566.001 / null | high / info |
+| mail   | email_malicious / email_suspicious / email_clean | T1566.001 / T1566.001 / null | high / medium / info |
 | file   | file_malicious / file_clean                      | T1204.002 / null | high / info |
 | field  | replay_rejected                                  | T1692.002  | medium   |
 | field  | handshake_rejected                               | T0830      | high     |

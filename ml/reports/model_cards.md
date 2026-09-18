@@ -77,10 +77,17 @@ mail the model's vocabulary has never seen.
   malicious; CEAS_08 is ~56%; SpamAssasin ~30%), which is part of why
   leave-one-corpus-out numbers swing as much as they do.
 
-**Explanations.** Top-3 TF-IDF tokens by `|coefficient x tfidf weight|`,
-converted to plain English by `sentinel_ml/reasons.py` (placeholder
-tokens and a curated phishing-cue-word list; anything else falls back to
-the raw word).
+**Verdict bands, no explanations (2026-09-19).** The service reports the
+model's score and a three-way verdict: below 0.40 clean, 0.40 up to 0.75
+suspicious (`email_suspicious`, medium), 0.75 and above malicious
+(`email_malicious`, high). `mailguard.verdict()` holds the cut-offs. MailGuard
+events carry no `reasons`: the per-word explanation was dropped because it
+listed ordinary words ("your", "hi") as phishing evidence even on clean mail.
+**Every accuracy and false-alarm figure above was measured at the previous
+single cut of about 0.51**; none of it has been re-measured at the 0.40 and
+0.75 bands (the raw dataset is not on the team's laptops), so do not quote the
+2% false-alarm figure for the new bands. Expect more mail flagged (anything
+0.40 and up) and fewer called outright malicious than before.
 
 ## FileGuard (file)
 
