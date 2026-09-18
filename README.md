@@ -2,8 +2,8 @@
 ### Energy-Aware Security for Post-Quantum IoT: Deciding Who Is Worth the Battery
 
 [![Code Cortex 3.0](https://img.shields.io/badge/Hackathon-Code%20Cortex%203.0%20(Security%20Track)-blueviolet?style=flat-square)](https://github.com/ramkirangaruda/Sentinel-Mesh)
-[![Firmware Tests](https://img.shields.io/badge/Firmware%20Tests-206%20Passing-brightgreen?style=flat-square)](firmware/test/)
-[![Console Tests](https://img.shields.io/badge/Console%20Tests-89%20Passing-brightgreen?style=flat-square)](console/tests/)
+[![Firmware Tests](https://img.shields.io/badge/Firmware%20Tests-288%20Passing-brightgreen?style=flat-square)](firmware/test/)
+[![Console Tests](https://img.shields.io/badge/Console%20Tests-99%20Passing-brightgreen?style=flat-square)](console/tests/)
 [![ML--C Parity](https://img.shields.io/badge/ML%E2%86%92C%20Parity-500%2F500%20Verified-blue?style=flat-square)](ml/tests/)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python)](ml/)
 [![PlatformIO](https://img.shields.io/badge/Platform-ESP32%20%7C%20PlatformIO-orange?style=flat-square&logo=espressif)](firmware/)
@@ -29,6 +29,7 @@
   - [3.2 L2 — FileGuard (PE Executable Analysis)](#32-l2--fileguard-pe-executable-analysis)
   - [3.3 L3 — FieldGuard (Post-Quantum Radio Protocol & Anomaly Detection)](#33-l3--fieldguard-post-quantum-radio-protocol--anomaly-detection)
   - [3.4 L4 — TamperGuard (Physical Multi-Sensor Defense)](#34-l4--tamperguard-physical-multi-sensor-defense)
+  - [3.5 Detection Channels: SMS Guard](#35-detection-channels-sms-guard)
 - [4. Correlation Engine & Central Console](#4-correlation-engine--central-console)
 - [5. System Architecture & Inter-Stream Contract](#5-system-architecture--inter-stream-contract)
 - [6. Hardware Specification & Topology](#6-hardware-specification--topology)
@@ -155,7 +156,7 @@ Traditional intrusion detection operates *post-facto* (after packet processing),
                         ┌───────────────────────────┐
                         │ EnergyGate Decision Tree  │
                         │ Exported to pure C        │
-                        │ Execution: < 50 µs        │
+                        │ 423 B flash, no static RAM│
                         └─────────────┬─────────────┘
                                       │
                                       ▼ P(real) ∈ [0, 1]
@@ -174,7 +175,8 @@ Traditional intrusion detection operates *post-facto* (after packet processing),
            deduct Joules from bucket.   Blocks spoofed flooders.           to SOC console.
 ```
 
-- **C Export with Bit-for-Bit Parity**: The decision tree is trained in Python (`scikit-learn`), compiled into a pure C function (`export/energygate.h`) with zero dynamic memory allocation and no external inference engine. Verified via automated test suites asserting 500/500 identical decisions between Python and compiled C.
+- **C Export, Parity-Checked**: The decision tree is trained in Python (`scikit-learn`) and exported as a pure C function (`float energygate_score(const float*)`) with no dynamic memory allocation and no inference engine. An automated test compiles the header with `gcc` and compares it to scikit-learn on 500 boundary-stressing feature vectors; the probabilities agree to float rounding (tolerance 1e-4, measured worst case 2e-7 on the shipped model). That shows the export is faithful, not that the model is accurate.
+- **Current status: trained on SIMULATED traces.** No real board recordings exist yet, so the tree compiled into field-1 (`energygate_model.h`) was trained on our own simulated windows (overlapping classes, noise, 3% label noise). Held out by recording session it reaches AUC 0.947 on that simulated data, which measures our generator, not real attackers; in simulation two features (`hs_fail`, `dup_pct`) do nearly all the work (`ml/reports/model_cards.md`). The scoring code is 423 B of flash on the ESP32; inference time and energy have not been measured yet, which is what the INA219 rig is for. Retrain on recorded traces with `make energygate` before quoting any accuracy.
 - **Clean Architectural Separation**: The ML model calculates *plausibility* ($P(\text{real})$); the microcontroller firmware evaluates that score against its *live physical energy reserve* (the Joule token bucket).
 
 ### 2.4 Contribution C: 5-Row Comparative Experiment
@@ -189,7 +191,10 @@ To rigorously validate EnergyGate, SentinelMesh benchmarked five distinct defens
 | **2. Unprotected Link** | Loud Flood / Slow Drip | *Max Drain* | *Severely Degraded (Hours)* | Intermittent | Severe (Buffer starvation) |
 | **3. Static Rate Limiting** | Slow Drip | *High Drain* | *Degraded* | Yes | Low |
 | **4. Cookie Challenge Only** | Coordinated Flood | *Low-Medium* | *Extended* | Yes (after retry) | 1 RTT (~40 ms) |
-| **5. EnergyGate (Adaptive)** | Loud Flood + Slow Drip | *Near-Baseline* | *Maximum Preservation* | Yes | < 50 µs gate evaluation |
+| **5. EnergyGate (Adaptive)** | Loud Flood + Slow Drip | *Near-Baseline* | *Maximum Preservation* | Yes | gate cost not yet measured |
+
+> [!IMPORTANT]
+> This table states the design's *expected* outcomes, not measurements. Real values come only from the INA219 rig (`docs/hardware_setup.md`); anything produced by the mock rig is tagged `source: "sim"` and shown as SIMULATED in the console. Row 5 also inherits the model status in section 2.3: its tree is currently trained on simulated traces.
 
 > [!NOTE]
 > The console UI provides an interactive **Battery Discharge Curve** tracking three concurrent projections: *Unprotected*, *No Attack Baseline*, and *Protected by EnergyGate*, directly visualizing battery life extended from hours to months.
@@ -202,9 +207,10 @@ To rigorously validate EnergyGate, SentinelMesh benchmarked five distinct defens
 - **Model**: TF-IDF (unigrams & bigrams, parameterized placeholder tokens for URLs, email addresses, and numerical values) paired with an L2-regularized Logistic Regression classifier.
 - **Dataset**: 75,631 de-duplicated emails aggregated across 5 public corpora: `CEAS_08`, `Enron`, `Ling`, `Nigerian_Fraud`, and `SpamAssassin`.
 - **Honest Evaluation & Generalization**:
-  - Naive Random 80/20 Split: **~98% Accuracy** (1.8% False Positive Rate).
+  - Random 70/15/15 Split (15% test): **~98% Accuracy** (1.8% False Positive Rate).
   - **Leave-One-Corpus-Out (Strict Generalization)**: **87.6% – 94.5% Accuracy** across unseen email writing styles.
-  - **Adversarial Hardening**: Defends against filler text padding attacks. Naive recall collapsed from 99.3% to 16.1% under padding; adversarial re-training recovered recall to **79.4%** at only 1.3% FPR.
+  - **Adversarial Hardening**: Defends against filler-text padding attacks. Padding a malicious email with ordinary text collapsed recall from 99.3% to 15.8%; adversarial training on three padding layouts (append, sandwich, interleaved) recovers it to 88.6% (append), 91.6% (sandwich) and 79.7% (interleaved) at a 1.9% false-alarm rate. On layouts it never trained on: 91% (6 chunks appended), 90% (6 prepended) and **72% (interleaved into 8 pieces), the open gap**.
+  - **Threshold Does Not Transfer**: tuned for at most 2% false alarms on data like the training data, the threshold gives 7.5% to 25.9% false alarms on a held-out corpus (`ml/reports/experiments.json`).
 - **Explainability**: Outputs the top three feature weights per prediction mapped to human-readable strings (e.g., *"Urgent payment phrasing"*, *"Suspicious credential request"*), powering the operator dashboard's "Why" panel.
 
 ### 3.2 L2 — FileGuard (PE Executable Analysis)
@@ -214,6 +220,8 @@ To rigorously validate EnergyGate, SentinelMesh benchmarked five distinct defens
   - Group-split validation based on feature hashes prevents data leakage from near-identical binaries (35,856 duplicate feature vectors isolated).
   - **The Third-Party Software Bias Discovery**: When tested against 1,566 modern benign binaries across 198 `pip` and `npm` native packages, the raw baseline model triggered a **40.5% False Positive Rate**. The team augmented and re-weighted the benign distribution, successfully cutting the false alarm rate to **0.44%** while preserving **98.94% detection at 0.1% FPR**.
   - Documented Limitation: 64-bit malware accounts for only 68 out of 96,724 training samples; model is explicitly documented as tuned for 32-bit PE binaries.
+  - **Unseen Malware Families**: the shipped split groups only identical feature vectors. Holding out whole clusters of similar files (k-means, k=300, 5 seeds) drops detection at 0.1% FPR from 98.5% ± 0.3% to **88.1% ± 7.2%**. Quote the 88% for malware unlike anything in training; clusters are a proxy for families, not labelled families.
+  - **`ImageBase` Shortcut Checked**: one column carries 74% of the gain, but retraining without the top-5 gain columns moves detection at 0.1% FPR only from 98.5% to 98.1%, so it is not a single fixable shortcut (`ml/reports/model_cards.md`).
 
 ### 3.3 L3 — FieldGuard (Post-Quantum Radio Protocol & Anomaly Detection)
 - **Wire Protocol**: Lightweight ESP-NOW framing featuring a 15-byte packed binary header (`epoch: uint16`, `seq: uint32`, `sender_id`, `frag_index`, `frag_total`, `msg_type`, `timestamp`).
@@ -224,7 +232,8 @@ To rigorously validate EnergyGate, SentinelMesh benchmarked five distinct defens
   - Authentication: Digital signatures via `ML-DSA-44` (with fallback to `HMAC-SHA256-PSK` if constrained execution limits require).
   - Session Encryption: Symmetric authenticated cipher via `AES-256-GCM`.
 - **Sliding-Window Replay Protection**: 64-bit sliding window bitmap per peer paired with monotonic sequence validation and timestamp freshness filtering.
-- **On-Device Anomaly Detection**: A microcontroller-hosted decision tree inspecting 5-second rolling window metrics (`hs_per_s`, `hs_fail`, `replay_rej`, `rssi_mean`, `rssi_var`, `loss_pct`, `jitter_ms`) classifying traffic into: `normal`, `weak_link`, `replay`, `flood`, or `impersonation`.
+- **On-Device Anomaly Detection**: A decision tree over 5-second rolling window metrics (10 features: `hs_per_s`, `hs_fail`, `replay_rej`, `auth_fail`, `stale`, `frag_timeout`, `rssi_mean`, `rssi_var`, `loss_pct`, `jitter_ms`) classifying traffic into `normal`, `weak_link`, `replay`, `flood`, or `impersonation`.
+- **Current status**: the board currently runs a hand-written rule-based classifier with placeholder thresholds (`field_model.h`). The training pipeline (train, C export, `gcc` parity check) is built and verified on synthetic data, but the tree has not been trained on recorded traces yet, so there is no measured FieldGuard accuracy to quote. `make test-feature-order` guards the feature order shared by the firmware and the trainer.
 
 ### 3.4 L4 — TamperGuard (Physical Multi-Sensor Defense)
 The battery-powered field sensor node incorporates **four independent physical tamper-sensing channels** to prevent physical bypass:
@@ -238,6 +247,11 @@ Upon trip detection on any channel, `field_node` triggers:
 - Zeroization: volatile session keys are immediately overwritten in SRAM.
 - Epoch Invalidation: increments session `epoch`, permanently invalidating the current replay window.
 - Immediate Gateway Notification: transmits an authenticated critical tamper event over the mesh before re-initiating a fresh handshake.
+
+### 3.5 Detection Channels: SMS Guard (extensibility demo)
+The console has a pluggable **Detection Channels** registry (`channels/*/manifest.json`, `GET /channels`, `POST /classify`). MailGuard and FileGuard appear as reference entries; **SMS Guard** is a real classifier trained on the UCI SMS Spam Collection (word + character TF-IDF into logistic regression, the same model family as MailGuard); WhatsApp, Telegram and Voice are labelled dummy entries with no model, and `/classify` refuses them.
+- **Held-out test (1,035 messages, 131 spam)**: 96.2% spam recall, 2.5% false alarms on legitimate messages, 84.6% precision, AUC 0.996. Repeated 5-fold cross-validation (15 fits, threshold re-tuned in every fold) gives the fairer range: recall 95.7% ± 2.5, false alarms 1.5%, **precision 90.9% ± 5.3 (79.5% to 97.6%)**, i.e. roughly 1 flag in 11 is a legitimate message.
+- **Limits**: no held-out source (cross-validation only re-splits the one collection); old, generic UK/Singapore spam labelled "smishing" rather than modern smishing; and legitimate messages containing digits are flagged about 5x as often as those without (6.0% vs 1.1%; a rehearsed appointment-reminder fixture scores 0.895 and is flagged). Details in `ml/reports/model_cards.md`.
 
 ---
 
@@ -505,7 +519,7 @@ python -m bridge.serial_bridge --port /dev/ttyUSB1 -v
 SentinelMesh maintains comprehensive automated test coverage across all three engineering disciplines:
 
 ### 1. Firmware Protocol Unit Tests (Native Host Execution)
-Execute 206 native C++ unit tests without hardware:
+Execute 288 native C++ unit tests without hardware:
 ```bash
 cd firmware
 bash tools/run_native_tests.sh
@@ -513,16 +527,17 @@ bash tools/run_native_tests.sh
 *Coverage: Wire format packing, fragment assembly out-of-order handling, sliding-window replay filter, DTLS cookie generator, Joule token-bucket mechanics, and embedded decision tree scoring.*
 
 ### 2. Machine Learning Export Parity Verification
-Verify that the generated C decision tree exactly replicates the Python scikit-learn model:
+Verify that the generated C decision trees match the Python scikit-learn models, and that the firmware and the trainers agree on feature order:
 ```bash
 cd ml
 make test-energygate
 make test-field-model
+make test-feature-order
 ```
-*Coverage: Automated compilation of `export/energygate.h` via `gcc`, running 500 randomized feature vectors through both Python and native C implementations, asserting 100% bit-for-bit prediction agreement.*
+*Coverage: compiles the exported header with `gcc`, runs 500 boundary-stressing feature vectors through both scikit-learn and the native C build, and asserts they agree (EnergyGate: probabilities within 1e-4, measured worst case 2e-7; FieldGuard: identical class). These tests use SYNTHETIC data, so they show the export is faithful, not that a model is accurate. `test-feature-order` reads the feature order documented in the firmware headers and compares it index for index to the trainers.*
 
 ### 3. Console & Correlation Engine Test Suite
-Run 89 automated pytest tests verifying schema compliance and correlation rules:
+Run 99 automated pytest tests verifying schema compliance and correlation rules:
 ```bash
 cd console
 pytest tests/ -q
@@ -538,7 +553,7 @@ A core tenet of SentinelMesh is absolute methodological honesty. In engineering 
 1. **Malware Safety Protocol**:
    No live malware binaries are ever downloaded, stored, or executed. Malicious file testing uses pre-extracted static PE-header feature vectors from held-out sets. Scans on live files are performed solely on verified benign binaries.
 2. **Generalization Over Random-Splits**:
-   Random 80/20 train/test splits report an overly flattering **~98%** accuracy on emails. We explicitly report **leave-one-corpus-out accuracy (87.6% – 94.5%)**, demonstrating true generalization to new writing styles.
+   A random 70/15/15 split reports an overly flattering **~98%** accuracy on emails. We explicitly report **leave-one-corpus-out accuracy (87.6% – 94.5%)**, demonstrating true generalization to new writing styles.
 3. **Transparent Bias Identification and Mitigation**:
    We openly document that our initial PE-malware model suffered a **40.5% false-alarm rate** on benign modern development packages (`pip`/`npm`), and demonstrate how we engineered a de-biasing distribution to cut that rate to **0.44%**.
 4. **Distinction Between Simulation and Physical Ground Truth**:
@@ -549,6 +564,8 @@ A core tenet of SentinelMesh is absolute methodological honesty. In engineering 
    2. *Cut 2*: Slow-drip automated profile.
    3. *Cut 3*: Learned EnergyGate model (fallback to cookie-challenge + static rate limit while reporting honest measured baseline numbers).
    4. *Never Cut*: Ground-truth energy measurements, the 5-row comparative experiment, the authenticated handshake, and replay-window verification.
+6. **Claims We Stress-Tested and Corrected**:
+   Before finalizing, we attacked our own numbers and wrote down what broke (`ml/experiments/`, `ml/reports/experiments.json`, `ml/reports/model_cards.md`): the padding-evasion attack (one layout is still an open gap); MailGuard's false-alarm threshold not transferring to a new corpus; FileGuard dropping to 88% on unseen malware clusters; SMS Guard flagging some legitimate messages that contain numbers; and EnergyGate and FieldGuard being trained on simulated data only, so we claim no accuracy for them.
 
 ---
 
