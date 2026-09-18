@@ -57,7 +57,8 @@ def load_traces(trace_dir: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def train(trace_dir: str, max_depth: int = 4, seed: int = 42, real_labels=None):
+def train(trace_dir: str, max_depth: int = 4, seed: int = 42, real_labels=None,
+          min_samples_leaf: int = 1):
     """Train on all sessions; evaluate leave-one-recording-session-out.
 
     `real_labels` overrides REAL_LABELS -- used by the synthetic-data test
@@ -85,7 +86,8 @@ def train(trace_dir: str, max_depth: int = 4, seed: int = 42, real_labels=None):
     if len(set(y)) < 2:
         raise ValueError("training data is all-real or all-not-real -- need both classes to fit a classifier")
 
-    clf = DecisionTreeClassifier(max_depth=max_depth, random_state=seed).fit(X, y)
+    clf = DecisionTreeClassifier(max_depth=max_depth, random_state=seed,
+                                 min_samples_leaf=min_samples_leaf).fit(X, y)
 
     per_session = {}
     for s in sorted(set(sessions)):
@@ -93,7 +95,8 @@ def train(trace_dir: str, max_depth: int = 4, seed: int = 42, real_labels=None):
         tr_mask = ~te_mask
         if len(set(y[tr_mask])) < 2 or te_mask.sum() == 0:
             continue
-        m = DecisionTreeClassifier(max_depth=max_depth, random_state=seed).fit(X[tr_mask], y[tr_mask])
+        m = DecisionTreeClassifier(max_depth=max_depth, random_state=seed,
+                                   min_samples_leaf=min_samples_leaf).fit(X[tr_mask], y[tr_mask])
         pred = m.predict(X[te_mask])
         per_session[s] = dict(n=int(te_mask.sum()), acc=round(float((pred == y[te_mask]).mean()), 4))
 

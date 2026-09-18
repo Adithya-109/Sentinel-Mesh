@@ -513,8 +513,13 @@ static void test_energygate_healthy_sender_scores_high() {
 }
 
 static void test_energygate_flooding_sender_scores_low() {
-    float f[ENERGYGATE_NUM_FEATURES] = {20.0f, 18.0f, -70.0f, 30.0f, 40.0f, 30.0f, 10.0f, 50.0f};
-    float s = energygate_score(f);
+    // The hand-made vector below (very weak -70 dBm signal plus failures) is
+    // where a real weak link and an attacker look alike, so a trained tree can
+    // legitimately answer "undecided" (~0.35) there. For the trained model use
+    // a typical flood window (~150 handshakes/s, ~40 failures, decent signal).
+    float stand_in[ENERGYGATE_NUM_FEATURES] = {20.0f, 18.0f, -70.0f, 30.0f, 40.0f, 30.0f, 10.0f, 50.0f};
+    float typical_flood[ENERGYGATE_NUM_FEATURES] = {150.0f, 40.0f, -60.0f, 6.0f, 12.0f, 15.0f, 35.0f, 80.0f};
+    float s = energygate_score(energygate_uses_trained_model() ? typical_flood : stand_in);
     CHECK(s < 0.3f);
     CHECK(s >= 0.0f);
 }

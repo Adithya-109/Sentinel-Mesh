@@ -1,174 +1,63 @@
 {
+  "SIMULATED": true,
+  "note": "simulated traces (generate_synthetic_traces.py --hard); encodes our own assumptions; not a result",
   "rows": 3600,
-  "sessions": [
-    "session_01",
-    "session_02",
-    "session_03",
-    "session_04",
-    "session_05",
-    "session_06",
-    "session_07",
-    "session_08",
-    "session_09",
-    "session_10",
-    "session_11",
-    "session_12",
-    "session_13",
-    "session_14",
-    "session_15",
-    "session_16",
-    "session_17",
-    "session_18",
-    "session_19",
-    "session_20",
-    "session_21",
-    "session_22",
-    "session_23",
-    "session_24",
-    "session_25",
-    "session_26",
-    "session_27",
-    "session_28",
-    "session_29",
-    "session_30"
-  ],
-  "real_pct": 63.9,
-  "leave_one_session_out": {
-    "session_01": {
-      "n": 120,
-      "acc": 1.0
+  "sessions": 30,
+  "real_pct": 62.7,
+  "label_noise": 0.03,
+  "min_samples_leaf": 20,
+  "depth_selected": 5,
+  "out_of_fold_by_depth": {
+    "3": {
+      "auc": 0.9343,
+      "log_loss": 0.1803,
+      "brier": 0.0438,
+      "ece": 0.0057,
+      "accuracy_at_0p5": 0.9514
     },
-    "session_02": {
-      "n": 120,
-      "acc": 0.975
+    "4": {
+      "auc": 0.9408,
+      "log_loss": 0.1747,
+      "brier": 0.0424,
+      "ece": 0.0077,
+      "accuracy_at_0p5": 0.9503
     },
-    "session_03": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_04": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_05": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_06": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_07": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_08": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_09": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_10": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_11": {
-      "n": 120,
-      "acc": 0.9917
-    },
-    "session_12": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_13": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_14": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_15": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_16": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_17": {
-      "n": 120,
-      "acc": 0.9917
-    },
-    "session_18": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_19": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_20": {
-      "n": 120,
-      "acc": 0.9917
-    },
-    "session_21": {
-      "n": 120,
-      "acc": 0.9917
-    },
-    "session_22": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_23": {
-      "n": 120,
-      "acc": 0.9833
-    },
-    "session_24": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_25": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_26": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_27": {
-      "n": 120,
-      "acc": 0.975
-    },
-    "session_28": {
-      "n": 120,
-      "acc": 0.9917
-    },
-    "session_29": {
-      "n": 120,
-      "acc": 1.0
-    },
-    "session_30": {
-      "n": 120,
-      "acc": 0.9917
+    "5": {
+      "auc": 0.947,
+      "log_loss": 0.1705,
+      "brier": 0.0396,
+      "ece": 0.0096,
+      "accuracy_at_0p5": 0.9547
     }
   },
-  "SIMULATED": true,
-  "note": "synthetic data from ml/tests/generate_synthetic_traces.py; not a result",
-  "max_depth": 4,
-  "leaves": 9,
-  "nodes": 17,
+  "leaves": 15,
+  "nodes": 29,
+  "leaf_probabilities": [
+    0.0,
+    0.0,
+    0.002,
+    0.023,
+    0.036,
+    0.05,
+    0.074,
+    0.091,
+    0.095,
+    0.13,
+    0.35,
+    0.5,
+    0.659,
+    0.958,
+    1.0
+  ],
   "feature_importances": {
-    "hs_per_s": 0.013,
-    "hs_fail": 0.537,
-    "rssi_mean": 0.002,
+    "hs_per_s": 0.021,
+    "hs_fail": 0.559,
+    "rssi_mean": 0.003,
     "rssi_var": 0.0,
-    "loss_pct": 0.019,
-    "dup_pct": 0.429,
+    "loss_pct": 0.024,
+    "dup_pct": 0.392,
     "frag_complete_pct": 0.0,
     "battery_pct": 0.0
   },
-  "c_vs_python_max_abs_diff_500_rows": 0.0
+  "c_vs_python_max_abs_diff_500_rows": 1.8604651162712482e-07
 }

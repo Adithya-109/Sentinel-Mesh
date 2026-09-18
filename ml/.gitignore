@@ -47,3 +47,5 @@ export/energygate.h
 # the simulated stopgap's working copy; the committed one is the firmware's energygate_model.h
 export/energygate_synthetic.h
 reports/energygate_metrics.json
+
+tests/synthetic_traces_hard/
