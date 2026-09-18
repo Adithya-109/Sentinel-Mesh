@@ -1,0 +1,79 @@
+{
+  "SIMULATED": true,
+  "note": "simulated traces (generate_synthetic_traces.py --hard); a statement about the generator, not about real traffic; not a result",
+  "rows": 3600,
+  "sessions": 30,
+  "real_pct": 62.7,
+  "depth": 5,
+  "min_samples_leaf": 20,
+  "protocol": "leave-one-recording-session-out; every window scored by a tree that never saw its session",
+  "by_feature_subset": {
+    "all 8 (shipped)": {
+      "features": [
+        "hs_per_s",
+        "hs_fail",
+        "rssi_mean",
+        "rssi_var",
+        "loss_pct",
+        "dup_pct",
+        "frag_complete_pct",
+        "battery_pct"
+      ],
+      "auc": 0.947,
+      "log_loss": 0.1705,
+      "brier": 0.0396,
+      "accuracy_at_0p5": 0.9547
+    },
+    "hs_fail + dup_pct": {
+      "features": [
+        "hs_fail",
+        "dup_pct"
+      ],
+      "auc": 0.955,
+      "log_loss": 0.1695,
+      "brier": 0.0413,
+      "accuracy_at_0p5": 0.9508
+    },
+    "the other 6 (without hs_fail, dup_pct)": {
+      "features": [
+        "hs_per_s",
+        "rssi_mean",
+        "rssi_var",
+        "loss_pct",
+        "frag_complete_pct",
+        "battery_pct"
+      ],
+      "auc": 0.8805,
+      "log_loss": 0.387,
+      "brier": 0.1202,
+      "accuracy_at_0p5": 0.8286
+    },
+    "hs_fail only": {
+      "features": [
+        "hs_fail"
+      ],
+      "auc": 0.7871,
+      "log_loss": 0.3932,
+      "brier": 0.1219,
+      "accuracy_at_0p5": 0.8486
+    },
+    "dup_pct only": {
+      "features": [
+        "dup_pct"
+      ],
+      "auc": 0.8009,
+      "log_loss": 0.4622,
+      "brier": 0.1477,
+      "accuracy_at_0p5": 0.8003
+    },
+    "battery_pct only (leakage control)": {
+      "features": [
+        "battery_pct"
+      ],
+      "auc": 0.485,
+      "log_loss": 0.6647,
+      "brier": 0.2358,
+      "accuracy_at_0p5": 0.6275
+    }
+  }
+}

@@ -40,7 +40,6 @@ N_PARITY_ROWS = 500
 # generate_synthetic_traces.py produces), so the parity check isn't just
 # re-testing the training distribution.
 FEATURE_RANGES = {
-    "window_ms": (1000, 10000),
     "hs_per_s": (0, 600),
     "hs_fail": (0, 200),
     "replay_rej": (0, 100),

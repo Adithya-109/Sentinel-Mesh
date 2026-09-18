@@ -156,6 +156,18 @@ SIMULATED: it encodes our own assumptions about attacks, so its accuracy is neve
 as a result. Compiled with the ESP32 toolchain it is 423 bytes of flash and no static RAM.
 Re-run `make energygate` on real traces and replace the header when they exist.
 
+`make test-feature-order` checks that the firmware headers and both trainers agree
+on which feature sits at which index (`FIELD_MODEL_NUM_FEATURES` = 10, EnergyGate = 8).
+The parity tests cannot catch a disagreement there, because they feed C and Python
+the same vector, so run it after touching either side's feature list. (The
+field model's `FEATURE_ORDER` used to include `window_ms`, one more feature than
+the firmware builds; that would have shifted every index on the board. Fixed.)
+
+`make energygate-ablation` retrains on feature subsets (same simulated data and
+held-out-session protocol) to show which signals the tree needs. In simulation
+`hs_fail` + `dup_pct` alone match all eight; see the EnergyGate section of
+`reports/model_cards.md` for what that does and does not mean.
+
 **Stretch, lowest priority** (brief's own cut order puts this first to
 cut): physical-identity / radio-fingerprint separability -- can the
 gateway tell two identical boards apart by RSSI/timing/jitter alone?
@@ -182,6 +194,22 @@ limits (the 64-bit blind spot, 2000-2008 email dates, a re-implemented
 feature extractor, and more). `sentinel_ml/reasons.py`: the word/feature
 -> plain-English map behind every `Event.reasons` entry.
 
+## Detection channels: SMS Guard
+
+`channels/sms/` (outside `ml/`, by design: a channel is self-contained and does
+not import from `sentinel_ml`) holds a smishing detector built the same way as
+MailGuard: word + character TF-IDF into logistic regression, trained on the UCI
+SMS Spam Collection with `python channels/sms/train.py` (downloads the dataset on
+first run, or pass `--data`). It is loaded by the console's `/classify` endpoint.
+Its model card, including its limits, is in `reports/model_cards.md`.
+`python channels/sms/evaluate.py` stress-tests it without touching the shipped files:
+it reproduces the shipped split, cross-validates, sweeps the threshold and checks
+whether digits drive the false alarms, writing `channels/sms/eval_report.json`
+(needs scikit-learn 1.8.0 and the dataset in `channels/sms/data/`, which
+`train.py`'s downloader fetches, or pass `--data`). Note it
+needs scikit-learn 1.8.0 (`console/requirements.txt`), not this folder's 1.9.1
+pin, to load the committed pickles without a version warning.
+
 ## Optional: DistilBERT vs. TF-IDF
 
 `notebooks/transformer_mailguard.ipynb` -- brief section 5's "strengthen
@@ -199,7 +227,8 @@ train_field_model.py the real field-model entrypoint (`make field-model`)
 train_energygate.py  the real EnergyGate entrypoint (`make energygate`, phase 3, v4)
 benign/              third-party benign binaries + build_benign_features.py
 demo/                held-out fixtures + run_demo.py for the live demo
-reports/             metrics.json, model_cards.md, charts/*.png (make_charts.py)
+experiments/         stress tests of the shipped models (run_experiments.py, energygate_sweep.py, energygate_ablation.py)
+reports/             metrics.json, experiments.json, model_cards.md, charts/*.png (make_charts.py)
 export/              field_model.h (phase 2), energygate.h (phase 3, v4) -- both C export, real traces only
 tests/               synthetic field-model + energygate pipeline tests (never real results)
 notebooks/           transformer_mailguard.ipynb (optional, GPU-only)

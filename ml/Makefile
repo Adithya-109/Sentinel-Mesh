@@ -5,7 +5,7 @@ else
 PY ?= .venv/bin/python
 endif
 
-.PHONY: field-model test-field-model energygate test-energygate energygate-synthetic
+.PHONY: field-model test-field-model energygate test-energygate energygate-synthetic energygate-ablation test-feature-order
 
 # Train the real on-device field model from data/traces/*.jsonl (Trace
 # rows per contracts/CONTRACT.md) and export it to export/field_model.h.
@@ -30,6 +30,19 @@ energygate:
 # inside). Replace by running `make energygate` once data/traces/ has real rows.
 energygate-synthetic:
 	$(PY) train_energygate_synthetic.py --firmware
+
+# Guards against the firmware and the trainers disagreeing on which feature is
+# at which index (the parity tests can't see that: they feed C and Python the
+# same vector). Reads the order documented in firmware/.../field_model.h and
+# energygate.h and compares it to FEATURE_ORDER.
+test-feature-order:
+	$(PY) tests/test_feature_order_matches_firmware.py
+
+# Which of EnergyGate's 8 signals does the tree need? Retrains on feature
+# subsets over the same SIMULATED data; writes
+# reports/energygate_synthetic_ablation.json only.
+energygate-ablation:
+	$(PY) experiments/energygate_ablation.py
 
 # Proves the EnergyGate pipeline against synthetic SYNTH_-labelled data.
 # Never a substitute for energygate -- see
