@@ -47,6 +47,15 @@ constexpr float BATTERY_DIVIDER_RATIO = 2.0f; // Vbat = ADC_volts * this
 constexpr float BATTERY_FULL_V = 4.2f;
 constexpr float BATTERY_EMPTY_V = 3.3f;
 
+// v4 energy rig (docs/v4_energy_split.md): GPIO marker line between the
+// board under test (src/benchmark or the field node) and the Monitor
+// board's INA219 rig (src/monitor). The board under test raises this pin
+// for the duration of each measured operation; the Monitor board watches
+// it as an input and attributes INA219 samples in between to that
+// operation. Same GPIO number on both boards, joined by a single jumper.
+constexpr int PIN_ENERGY_MARKER = 4;
+constexpr uint8_t INA219_I2C_ADDR = 0x40; // Adafruit INA219 default address
+
 // Serial link to console (gateway only): USB serial, 115200 8N1, one
 // message (EVT/TRC/LOG in, LABEL out) per line, per contract.
 constexpr uint32_t CONSOLE_SERIAL_BAUD = 115200;

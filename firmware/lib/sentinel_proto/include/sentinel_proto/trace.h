@@ -11,6 +11,16 @@
 // tags whichever TRC lines follow (see gateway main.cpp), so the recorded
 // stream can be used as supervised training data for the field model.
 //
+// v4 energy delta (docs/v4_energy_split.md): trace.schema.json adds three
+// *optional* fields -- battery_pct, frag_complete_pct, dup_pct -- EnergyGate's
+// free signals. Optional because pre-v4 producers (mocks, already-recorded
+// sessions) must keep validating without them; new_trace() below only
+// writes each one if the caller has actually set it (battery_pct in
+// particular needs the field node's own reading, which the gateway can't
+// know until the DATA payload decrypt path exists -- see gateway main.cpp
+// TODOs -- so it stays unset/omitted until then rather than lying with a
+// fake 0).
+//
 // ESP32-only (ArduinoJson) — not part of the host-side unit test suite.
 
 #include <ArduinoJson.h>
@@ -40,6 +50,13 @@ struct TraceWindowCounters {
     double jitter_sum_ms = 0;
     uint32_t jitter_samples = 0;
 
+    // v4 EnergyGate free signals.
+    uint32_t frag_sets_started = 0;   // reassembly streams begun this window
+    uint32_t frag_sets_completed = 0; // ... that actually completed
+    uint32_t duplicate_count = 0;     // ReplayFilter::Result::DUPLICATE hits
+    uint32_t total_received = 0;      // total packets that reached the replay check
+    float battery_pct = -1.0f;        // field node's battery %; -1 = not yet known (see trace.h header)
+
     void reset() { *this = TraceWindowCounters{}; window_ms = 5000; }
     void add_rssi(float rssi) {
         rssi_sum += rssi;
@@ -61,6 +78,15 @@ struct TraceWindowCounters {
     }
     float jitter_mean_ms() const { return jitter_samples ? static_cast<float>(jitter_sum_ms / jitter_samples) : 0.0f; }
     float hs_per_s() const { return window_ms ? (1000.0f * hs_count / window_ms) : 0.0f; }
+
+    // v4: % of this window's reassembly streams that actually completed.
+    float frag_complete_pct() const {
+        return frag_sets_started ? (100.0f * frag_sets_completed / frag_sets_started) : 100.0f;
+    }
+    // v4: duplicate-packet rate on the link this window.
+    float dup_pct() const {
+        return total_received ? (100.0f * duplicate_count / total_received) : 0.0f;
+    }
 };
 
 // Builds the contract-exact Trace JsonDocument from accumulated counters.

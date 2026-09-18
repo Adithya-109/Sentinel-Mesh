@@ -10,6 +10,9 @@
 //                        threat model)
 //   MODE WEAK_LINK      simulate a degraded link (drop/delay/jitter its own
 //                        traffic) rather than attacking outright
+//   MODE SLOW_DRIP      v4: ~1 handshake/min -- stays under any fixed rate
+//                        limit but still drains the energy budget over time
+//                        (brief v4 / docs/v4_energy_split.md task 4)
 //   MODE OFF             stop whatever mode is running
 //
 // This only needs to construct and send plausible-looking packets; it does
@@ -29,7 +32,7 @@
 
 using namespace sentinel;
 
-enum class AttackMode { OFF, REPLAY, FLOOD, IMPERSONATE, WEAK_LINK };
+enum class AttackMode { OFF, REPLAY, FLOOD, IMPERSONATE, WEAK_LINK, SLOW_DRIP };
 static AttackMode g_mode = AttackMode::OFF;
 
 // Captured packet for REPLAY mode.
@@ -38,6 +41,17 @@ static bool g_have_capture = false;
 
 static uint16_t g_flood_epoch_base = 0xA11C;  // 16-bit epoch (brief v2 6.1), bogus each time
 static uint32_t g_flood_seq = 0;   // 32-bit seq per brief v2 section 7
+
+// v4 (docs/v4_energy_split.md, firmware task 4): "the slow-drip profile
+// (~1/min, brief section 6 -- 'sits under any fixed rate limit but still
+// drains the cell')". A handshake attempt roughly once a minute never
+// looks like a flood by rate alone -- the whole point is that a naive
+// rate-limit defense passes it through, while EnergyGate's token bucket
+// still bleeds down over the hour even at that low a rate. Reuses the
+// FLOOD path's packet construction, just at a much slower cadence.
+static uint16_t g_slow_drip_epoch_base = 0x5D91; // distinct base from FLOOD's, purely cosmetic
+static uint32_t g_slow_drip_seq = 0;
+constexpr uint32_t SLOW_DRIP_INTERVAL_MS = 60000; // ~1/min
 
 // ---------------------------------------------------------------------
 // Mode handlers — called from loop() at whatever cadence suits the mode.
@@ -93,6 +107,33 @@ static void tick_impersonate() {
     delay(1000);
 }
 
+static void tick_slow_drip() {
+    static uint32_t last_ms = 0;
+    uint32_t now = millis();
+    if (now - last_ms < SLOW_DRIP_INTERVAL_MS) return;
+    last_ms = now;
+
+    PacketHeader hdr;
+    hdr.type = MsgType::HELLO;
+    hdr.sender = static_cast<uint8_t>(NodeId::ATTACKER);
+    hdr.epoch = g_slow_drip_epoch_base++;
+    hdr.seq = g_slow_drip_seq++;
+    hdr.time_ms = now;
+    hdr.frag_n = 1;
+
+    uint8_t buf[HEADER_SIZE];
+    hdr.serialize(buf, sizeof(buf));
+    // TODO: send `buf` on the mesh transport, same as tick_flood(). At
+    // ~1/min this shouldn't trip classify_window()'s hs_per_s/hs_fail
+    // FLOOD threshold (field_model.h) -- that's the point, per brief
+    // section 6: demonstrates why a plain rate limit isn't enough and
+    // EnergyGate's budget-over-time view is needed instead. Expected
+    // gateway behavior: individually unremarkable gate_decision events,
+    // but the energy budget trends down over the demo's run instead of
+    // holding steady the way idle/normal traffic does.
+    (void)buf;
+}
+
 static void tick_weak_link() {
     // Simulate a degraded link by sending the attacker's own traffic with
     // deliberately induced jitter/drops, rather than targeting anyone.
@@ -123,6 +164,8 @@ static void handle_command(const String& cmd) {
         g_mode = AttackMode::IMPERSONATE;
     } else if (cmd == "MODE WEAK_LINK") {
         g_mode = AttackMode::WEAK_LINK;
+    } else if (cmd == "MODE SLOW_DRIP") {
+        g_mode = AttackMode::SLOW_DRIP;
     } else if (cmd == "MODE OFF") {
         g_mode = AttackMode::OFF;
     } else {
@@ -141,7 +184,7 @@ static void handle_command(const String& cmd) {
 void setup() {
     Serial.begin(board::CONSOLE_SERIAL_BAUD);
     randomSeed(esp_random());
-    Serial.println("LOG attacker boot complete. Commands: MODE REPLAY|FLOOD|IMPERSONATE|WEAK_LINK|OFF");
+    Serial.println("LOG attacker boot complete. Commands: MODE REPLAY|FLOOD|IMPERSONATE|WEAK_LINK|SLOW_DRIP|OFF");
 }
 
 void loop() {
@@ -155,4 +198,8 @@ void loop() {
         case AttackMode::REPLAY: tick_replay(); break;
         case AttackMode::FLOOD: tick_flood(); break;
         case AttackMode::IMPERSONATE: tick_impersonate(); break;
-        case AttackMode::WEAK_LINK
+        case AttackMode::WEAK_LINK: tick_weak_link(); break;
+        case AttackMode::SLOW_DRIP: tick_slow_drip(); break;
+        case AttackMode::OFF: delay(100); break;
+    }
+}

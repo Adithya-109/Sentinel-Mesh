@@ -20,6 +20,9 @@
 #include "sentinel_proto/fragment.h"
 #include "sentinel_proto/replay.h"
 #include "sentinel_proto/field_model.h"
+#include "sentinel_proto/cookie.h"
+#include "sentinel_proto/energy_budget.h"
+#include "sentinel_proto/energygate.h"
 
 using namespace sentinel;
 
@@ -363,6 +366,166 @@ static void test_field_model_weak_link() {
     CHECK(classify_window(f) == static_cast<int>(FieldClass::WEAK_LINK));
 }
 
+// ---------------------------------------------------------------------
+// Cookie challenge (v4: handshake-flood mitigation, brief v4)
+// ---------------------------------------------------------------------
+
+static void test_cookie_generate_is_deterministic() {
+    CookieChallenge c(12345);
+    uint8_t a[COOKIE_LEN], b[COOKIE_LEN];
+    c.generate(1, 100, a);
+    c.generate(1, 100, b);
+    CHECK(std::memcmp(a, b, COOKIE_LEN) == 0);
+}
+
+static void test_cookie_verify_accepts_freshly_generated() {
+    CookieChallenge c(0xABCDEF01);
+    uint32_t now = 10000;
+    uint8_t cookie[COOKIE_LEN];
+    c.generate(3, CookieChallenge::time_window_for(now), cookie);
+    CHECK(c.verify(3, now, cookie));
+}
+
+static void test_cookie_verify_rejects_wrong_sender() {
+    CookieChallenge c(42);
+    uint32_t now = 5000;
+    uint8_t cookie[COOKIE_LEN];
+    c.generate(1, CookieChallenge::time_window_for(now), cookie);
+    CHECK(!c.verify(2, now, cookie)); // same window, different claimed sender
+}
+
+static void test_cookie_verify_rejects_garbage() {
+    CookieChallenge c(999);
+    uint8_t garbage[COOKIE_LEN] = {1, 2, 3, 4, 5, 6, 7, 8};
+    CHECK(!c.verify(1, 1000, garbage));
+}
+
+static void test_cookie_verify_accepts_previous_window() {
+    CookieChallenge c(7);
+    uint32_t issue_time = 4 * COOKIE_WINDOW_MS + 100; // well inside window 4
+    uint8_t cookie[COOKIE_LEN];
+    c.generate(9, CookieChallenge::time_window_for(issue_time), cookie);
+
+    // Verified slightly later, now in window 5 -- still accepted (tolerance
+    // for a request arriving just after the boundary).
+    uint32_t verify_time = 5 * COOKIE_WINDOW_MS + 50;
+    CHECK(CookieChallenge::time_window_for(verify_time) == CookieChallenge::time_window_for(issue_time) + 1);
+    CHECK(c.verify(9, verify_time, cookie));
+}
+
+static void test_cookie_verify_rejects_too_old_window() {
+    CookieChallenge c(7);
+    uint8_t cookie[COOKIE_LEN];
+    c.generate(9, 0, cookie); // window 0
+
+    // Two windows later: outside the current-or-previous tolerance.
+    uint32_t verify_time = 2 * COOKIE_WINDOW_MS + 50;
+    CHECK(!c.verify(9, verify_time, cookie));
+}
+
+static void test_cookie_different_secrets_disagree() {
+    CookieChallenge c1(111);
+    CookieChallenge c2(222);
+    uint8_t a[COOKIE_LEN], b[COOKIE_LEN];
+    c1.generate(1, 5, a);
+    c2.generate(1, 5, b);
+    CHECK(std::memcmp(a, b, COOKIE_LEN) != 0);
+}
+
+// ---------------------------------------------------------------------
+// Energy token bucket (v4: EnergyGate budget)
+// ---------------------------------------------------------------------
+
+static void test_energy_budget_starts_full_by_default() {
+    EnergyBudget b(/*capacity_j=*/10.0f, /*refill_rate_j_per_s=*/1.0f);
+    CHECK(b.balance_j() == 10.0f);
+    CHECK(!b.exhausted());
+}
+
+static void test_energy_budget_starts_at_given_initial() {
+    EnergyBudget b(10.0f, 1.0f, /*initial_j=*/2.5f);
+    CHECK(b.balance_j() == 2.5f);
+}
+
+static void test_energy_budget_initial_clamped_to_capacity() {
+    EnergyBudget b(10.0f, 1.0f, /*initial_j=*/999.0f);
+    CHECK(b.balance_j() == 10.0f);
+}
+
+static void test_energy_budget_spend_deducts_and_succeeds() {
+    EnergyBudget b(10.0f, 0.0f); // no refill, isolate the spend logic
+    CHECK(b.spend(3.0f, 0));
+    CHECK(b.balance_j() == 7.0f);
+}
+
+static void test_energy_budget_spend_fails_when_insufficient() {
+    EnergyBudget b(5.0f, 0.0f);
+    CHECK(!b.spend(6.0f, 0));
+    CHECK(b.balance_j() == 5.0f); // untouched on failure
+}
+
+static void test_energy_budget_refills_over_time() {
+    EnergyBudget b(10.0f, /*refill_rate_j_per_s=*/2.0f, /*initial_j=*/0.0f);
+    b.tick(0);            // establish the clock, no refill yet
+    b.tick(1000);          // 1s elapsed @ 2 J/s
+    CHECK(b.balance_j() == 2.0f);
+}
+
+static void test_energy_budget_refill_clamped_to_capacity() {
+    EnergyBudget b(5.0f, 10.0f, /*initial_j=*/0.0f);
+    b.tick(0);
+    b.tick(10000); // would refill 100J at 10J/s over 10s -- clamped to capacity
+    CHECK(b.balance_j() == 5.0f);
+}
+
+static void test_energy_budget_can_afford_does_not_deduct() {
+    EnergyBudget b(10.0f, 0.0f);
+    CHECK(b.can_afford(4.0f, 0));
+    CHECK(b.balance_j() == 10.0f); // can_afford is a query, not a spend
+}
+
+static void test_energy_budget_exhausted_flag() {
+    EnergyBudget b(1.0f, 0.0f, /*initial_j=*/0.0f);
+    CHECK(b.exhausted());
+    b.credit(0.5f);
+    CHECK(!b.exhausted());
+}
+
+static void test_energy_budget_credit_clamped_and_floored() {
+    EnergyBudget b(10.0f, 0.0f, 0.0f);
+    b.credit(999.0f);
+    CHECK(b.balance_j() == 10.0f);
+}
+
+// ---------------------------------------------------------------------
+// EnergyGate rule-based score stand-in
+// ---------------------------------------------------------------------
+// Feature order: hs_per_s, hs_fail, frag_complete_pct, loss_pct, dup_pct,
+// rssi_mean, rssi_var, battery_pct.
+
+static void test_energygate_healthy_sender_scores_high() {
+    float f[ENERGYGATE_NUM_FEATURES] = {0.2f, 0, 100.0f, 0.0f, 0.0f, -55.0f, 2.0f, 80.0f};
+    float s = energygate_score(f);
+    CHECK(s > 0.8f);
+    CHECK(s <= 1.0f);
+}
+
+static void test_energygate_flooding_sender_scores_low() {
+    float f[ENERGYGATE_NUM_FEATURES] = {20.0f, 18.0f, 10.0f, 40.0f, 30.0f, -70.0f, 30.0f, 50.0f};
+    float s = energygate_score(f);
+    CHECK(s < 0.3f);
+    CHECK(s >= 0.0f);
+}
+
+static void test_energygate_score_bounded() {
+    float f_lo[ENERGYGATE_NUM_FEATURES] = {1000.0f, 1000.0f, 0.0f, 100.0f, 100.0f, -100.0f, 500.0f, 0.0f};
+    float f_hi[ENERGYGATE_NUM_FEATURES] = {0.0f, 0.0f, 100.0f, 0.0f, 0.0f, -30.0f, 0.0f, 100.0f};
+    CHECK(energygate_score(f_lo) >= 0.0f);
+    CHECK(energygate_score(f_lo) <= 1.0f);
+    CHECK(energygate_score(f_hi) >= 0.0f);
+    CHECK(energygate_score(f_hi) <= 1.0f);
+}
+
 int main() {
     RUN(test_header_roundtrip_basic);
     RUN(test_header_all_msg_types_roundtrip);
@@ -393,6 +556,29 @@ int main() {
     RUN(test_field_model_replay_campaign);
     RUN(test_field_model_impersonation);
     RUN(test_field_model_weak_link);
+
+    RUN(test_cookie_generate_is_deterministic);
+    RUN(test_cookie_verify_accepts_freshly_generated);
+    RUN(test_cookie_verify_rejects_wrong_sender);
+    RUN(test_cookie_verify_rejects_garbage);
+    RUN(test_cookie_verify_accepts_previous_window);
+    RUN(test_cookie_verify_rejects_too_old_window);
+    RUN(test_cookie_different_secrets_disagree);
+
+    RUN(test_energy_budget_starts_full_by_default);
+    RUN(test_energy_budget_starts_at_given_initial);
+    RUN(test_energy_budget_initial_clamped_to_capacity);
+    RUN(test_energy_budget_spend_deducts_and_succeeds);
+    RUN(test_energy_budget_spend_fails_when_insufficient);
+    RUN(test_energy_budget_refills_over_time);
+    RUN(test_energy_budget_refill_clamped_to_capacity);
+    RUN(test_energy_budget_can_afford_does_not_deduct);
+    RUN(test_energy_budget_exhausted_flag);
+    RUN(test_energy_budget_credit_clamped_and_floored);
+
+    RUN(test_energygate_healthy_sender_scores_high);
+    RUN(test_energygate_flooding_sender_scores_low);
+    RUN(test_energygate_score_bounded);
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
