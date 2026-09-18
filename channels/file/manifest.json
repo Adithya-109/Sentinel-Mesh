@@ -1,0 +1,14 @@
+{
+  "id": "file",
+  "display_name": "File Guard",
+  "description": "Existing FileGuard classifier (LightGBM on 54 PE header features), wrapped for the Detection Channels registry. Unmodified by this feature -- listed here for reference only.",
+  "status": "active",
+  "enabled": true,
+  "model_path": "ml/models/fileguard.joblib",
+  "vectorizer_path": null,
+  "metrics": {
+    "note": "See ml/reports/ for held-out evaluation numbers. Not duplicated here to avoid two sources of truth for the same model."
+  },
+  "live_classify": false,
+  "test_endpoint": "/api/scan/file"
+}

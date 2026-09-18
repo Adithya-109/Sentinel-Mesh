@@ -1,0 +1,18 @@
+{
+  "id": "sms",
+  "display_name": "SMS Guard",
+  "description": "Real, trained smishing classifier: word + character n-gram TF-IDF -> Logistic Regression, same model family as MailGuard ('same engine, new config'), tuned for SMS's short length.",
+  "status": "active",
+  "enabled": true,
+  "model_path": "channels/sms/model.joblib",
+  "vectorizer_path": "channels/sms/vectorizer.joblib",
+  "metrics": {
+    "accuracy": 0.9729,
+    "precision_smishing": 0.8456,
+    "recall_smishing": 0.9618,
+    "auc": 0.9956,
+    "threshold": 0.2204,
+    "trained_on": "UCI SMS Spam Collection, 5171 msgs after de-dup (1035 held out for this evaluation)"
+  },
+  "live_classify": true
+}
