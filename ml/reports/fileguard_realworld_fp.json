@@ -1,0 +1,160 @@
+{
+  "what": "FileGuard false-positive rate on real benign software the model was not trained on",
+  "model": "models\\fileguard.joblib",
+  "threshold": 0.9579,
+  "files": 3056,
+  "caveat": "Files are trusted install locations on one machine and are assumed benign, not verified. This measures false alarms only -- it says nothing about detection.",
+  "overall": {
+    "n": 3056,
+    "flagged": 6,
+    "rate": 0.002,
+    "ci95": [
+      0.0009,
+      0.0043
+    ]
+  },
+  "overall_at_0.5": {
+    "n": 3056,
+    "flagged": 15,
+    "rate": 0.0049,
+    "ci95": [
+      0.003,
+      0.0081
+    ]
+  },
+  "apps_only_not_windows_system": {
+    "n": 1158,
+    "flagged": 6,
+    "rate": 0.0052,
+    "ci95": [
+      0.0024,
+      0.0113
+    ]
+  },
+  "windows_system_only": {
+    "n": 1898,
+    "flagged": 0,
+    "rate": 0.0,
+    "ci95": [
+      0.0,
+      0.002
+    ]
+  },
+  "x86": {
+    "n": 1055,
+    "flagged": 4,
+    "rate": 0.0038,
+    "ci95": [
+      0.0015,
+      0.0097
+    ]
+  },
+  "x64": {
+    "n": 1985,
+    "flagged": 2,
+    "rate": 0.001,
+    "ci95": [
+      0.0003,
+      0.0037
+    ]
+  },
+  "apps_x86": {
+    "n": 364,
+    "flagged": 4,
+    "rate": 0.011,
+    "ci95": [
+      0.0043,
+      0.0279
+    ]
+  },
+  "apps_x64": {
+    "n": 778,
+    "flagged": 2,
+    "rate": 0.0026,
+    "ci95": [
+      0.0007,
+      0.0093
+    ]
+  },
+  "by_category": {
+    "program_files": {
+      "n": 724,
+      "flagged": 4,
+      "rate": 0.0055,
+      "ci95": [
+        0.0022,
+        0.0141
+      ]
+    },
+    "program_files_x86": {
+      "n": 327,
+      "flagged": 1,
+      "rate": 0.0031,
+      "ci95": [
+        0.0005,
+        0.0171
+      ]
+    },
+    "user_programs": {
+      "n": 107,
+      "flagged": 1,
+      "rate": 0.0093,
+      "ci95": [
+        0.0017,
+        0.0511
+      ]
+    },
+    "windows_drivers": {
+      "n": 300,
+      "flagged": 0,
+      "rate": 0.0,
+      "ci95": [
+        0.0,
+        0.0126
+      ]
+    },
+    "windows_system32": {
+      "n": 900,
+      "flagged": 0,
+      "rate": 0.0,
+      "ci95": [
+        0.0,
+        0.0043
+      ]
+    },
+    "windows_syswow64": {
+      "n": 698,
+      "flagged": 0,
+      "rate": 0.0,
+      "ci95": [
+        0.0,
+        0.0055
+      ]
+    }
+  },
+  "signed": {
+    "n": 1511,
+    "flagged": 4,
+    "rate": 0.0026,
+    "ci95": [
+      0.001,
+      0.0068
+    ]
+  },
+  "unsigned": {
+    "n": 1545,
+    "flagged": 2,
+    "rate": 0.0013,
+    "ci95": [
+      0.0004,
+      0.0047
+    ]
+  },
+  "flagged_files_by_app": {
+    "program_files/app-20d66ead": 2,
+    "program_files/app-74a54a55": 1,
+    "program_files/app-d91b682c": 1,
+    "program_files_x86/app-b10027fd": 1,
+    "user_programs/app-3548254c": 1
+  }
+}
