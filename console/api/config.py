@@ -50,3 +50,12 @@ OFFLINE_AFTER_MS = int(os.environ.get("SENTINEL_OFFLINE_AFTER_MS", 120_000))
 # Where the built React frontend lives; served at / when present.
 WEB_DIST = os.environ.get("SENTINEL_WEB_DIST", os.path.join(CONSOLE_DIR, "web", "dist"))
 ENERGY_SCHEMA_PATH = os.path.join(CONTRACTS_DIR, "energy.schema.json")
+
+# -- detection channels ------------------------------------------------------
+
+# One subfolder per channel, each with a manifest.json (api/channels.py).
+# Sits next to console/, ml/, firmware/ -- not owned by any one stream's
+# folder, since a channel manifest can point at a model trained by ml/ (SMS)
+# or reference one that already lives there (MailGuard, FileGuard) without
+# console/ needing to contain model code itself.
+CHANNELS_DIR = os.environ.get("SENTINEL_CHANNELS_DIR", os.path.join(REPO_DIR, "channels"))

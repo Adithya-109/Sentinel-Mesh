@@ -1,0 +1,25 @@
+{
+  "note": "Hand-written demo script for the live SMS Guard test box. Rehearsed, not improvised -- paste these verbatim during the pitch. None of these messages are in the UCI training data.",
+  "messages": [
+    {
+      "id": "smishing_delivery",
+      "expected_label": "smishing",
+      "text": "USPS: Your package could not be delivered due to an incomplete address. Update your details within 24hrs to avoid return: http://usps-redelivery.info/track"
+    },
+    {
+      "id": "smishing_otp_bank",
+      "expected_label": "smishing",
+      "text": "ALERT: unusual sign-in detected on your Chase account. Reply with the OTP code sent to your phone to verify it was you, or your card will be suspended immediately."
+    },
+    {
+      "id": "legit_reminder",
+      "expected_label": "legitimate",
+      "text": "Hi, this is a reminder that your dentist appointment with Dr. Patel is tomorrow at 2:30pm. Reply C to confirm or call the office to reschedule."
+    },
+    {
+      "id": "legit_friend",
+      "expected_label": "legitimate",
+      "text": "Hey are we still on for dinner tonight? I can pick you up around 7 if that still works for you"
+    }
+  ]
+}

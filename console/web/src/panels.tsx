@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "./api";
 import TiltCard from "./components/TiltCard";
-import type { AttackProfile, Incident, Mode, SmEvent, Stage, Status } from "./types";
+import type { AttackProfile, Channel, ClassifyResult, Incident, Mode, SmEvent, Stage, Status } from "./types";
 import { ACTION, Card, Chip, EventRow, fmtNum, fmtTime, LINK, NODE, SeverityChip, techniqueName } from "./ui";
 
 // -- status bar ---------------------------------------------------------------
@@ -158,6 +158,131 @@ export function GateFeed({ events }: { events: SmEvent[] }) {
       <div className="feed short">
         {gate.length ? gate.slice(0, 60).map(e => <EventRow key={e.id} e={e} />)
           : <div className="empty">No decisions yet. Switch the defence to EnergyGate while an attack runs.</div>}
+      </div>
+    </Card>
+  );
+}
+
+// -- Detection Channels --------------------------------------------------------
+// channels/*/manifest.json, api/channels.py. Proves the architecture scales to
+// a channel beyond email/file without touching MailGuard or FileGuard: SMS is
+// the one real, trained channel here; everything else is visibly a demo.
+
+const fmtPct = (v: unknown) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "—");
+
+function ChannelToggle({ c, busy, onToggle }: { c: Channel; busy: boolean; onToggle: () => void }) {
+  return (
+    <button className={`channel-toggle${c.enabled ? " on" : ""}`} disabled={busy} onClick={onToggle}
+      title={c.enabled ? "Turn this channel off" : "Turn this channel on"}>
+      {c.enabled ? "Enabled" : "Disabled"}
+    </button>
+  );
+}
+
+export function DetectionChannels({ channels, error, onChange }: {
+  channels: Channel[] | null; error: string | null; onChange: () => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [toggleErr, setToggleErr] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const [classifying, setClassifying] = useState(false);
+  const [result, setResult] = useState<ClassifyResult | null>(null);
+  const [classifyErr, setClassifyErr] = useState<string | null>(null);
+
+  const toggle = async (id: string) => {
+    setBusyId(id); setToggleErr(null);
+    try { await api.toggleChannel(id); onChange(); }
+    catch (e) { setToggleErr(e instanceof Error ? e.message : String(e)); }
+    setBusyId(null);
+  };
+
+  const runClassify = async () => {
+    setClassifying(true); setClassifyErr(null); setResult(null);
+    try { setResult(await api.classify("sms", text)); }
+    catch (e) { setClassifyErr(e instanceof Error ? e.message : String(e)); }
+    setClassifying(false);
+  };
+
+  const reference = channels?.filter(c => c.id === "email" || c.id === "file") ?? [];
+  const sms = channels?.find(c => c.id === "sms");
+  const dummy = channels?.filter(c => c.status === "dummy") ?? [];
+
+  return (
+    <Card title="Detection Channels" hint="pluggable registry (channels/*/manifest.json) — adding a channel is a folder, not a code change">
+      {error && <div className="err">{error}</div>}
+      {toggleErr && <div className="err">{toggleErr}</div>}
+      {!channels && <div className="empty">Loading channels&hellip;</div>}
+      <div className="channel-grid">
+        {reference.map(c => (
+          <div className="channel-card" key={c.id}>
+            <div className="channel-head">
+              <b>{c.display_name}</b>
+              <span className="chip" style={{ color: "var(--good)" }}>always on</span>
+            </div>
+            <div className="small">{c.description}</div>
+            <div className="small" style={{ marginTop: 6 }}>
+              Live-tested on the <b>Scan</b> tab ({c.test_endpoint}) — not through this panel.
+            </div>
+          </div>
+        ))}
+
+        {sms && (
+          <div className="channel-card wide">
+            <div className="channel-head">
+              <b>{sms.display_name}</b>
+              <ChannelToggle c={sms} busy={busyId === sms.id} onToggle={() => toggle(sms.id)} />
+            </div>
+            <div className="small">{sms.description}</div>
+            <div className="channel-metrics">
+              <span>accuracy <b>{fmtPct(sms.metrics.accuracy)}</b></span>
+              <span>precision <b>{fmtPct(sms.metrics.precision_smishing)}</b></span>
+              <span>recall <b>{fmtPct(sms.metrics.recall_smishing)}</b></span>
+            </div>
+            <div className="small" style={{ marginTop: 4 }}>{String(sms.metrics.trained_on ?? "")}</div>
+
+            <div style={{ marginTop: 12 }}>
+              <textarea value={text} onChange={e => setText(e.target.value)}
+                placeholder="Paste an SMS message to test" style={{ minHeight: 70 }} />
+              <div className="scan-row">
+                <button className="btn primary" disabled={classifying || !sms.enabled || !text.trim()} onClick={runClassify}>
+                  Test a message
+                </button>
+                {!sms.enabled && <span className="small">channel is disabled — toggle it on first</span>}
+                {classifying && <span className="small">scoring&hellip;</span>}
+              </div>
+              {classifyErr && <div className="err" style={{ marginTop: 6 }}>{classifyErr}</div>}
+              {result && (
+                <div className="ev" style={{ marginTop: 6 }}>
+                  <div>
+                    <span className="chip" style={{ color: result.label === "smishing" ? "var(--critical)" : "var(--good)" }}>
+                      {result.label === "smishing" ? "✖" : "✔"} {result.label}
+                    </span>
+                  </div>
+                  <div className="body">
+                    <div className="sum">confidence <span className="prob">{result.confidence.toFixed(2)}</span></div>
+                    {result.reasons.length > 0 && (
+                      <ul className="reasons">{result.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {dummy.map(c => (
+          <div className="channel-card" key={c.id}>
+            <div className="channel-head">
+              <b>{c.display_name}</b>
+              <ChannelToggle c={c} busy={busyId === c.id} onToggle={() => toggle(c.id)} />
+            </div>
+            <span className="badge-demo">Demo data &mdash; not trained</span>
+            <div className="small" style={{ marginTop: 6 }}>{c.description}</div>
+            <div className="channel-metrics">
+              <span>accuracy <b>{fmtPct(c.metrics.accuracy)}</b></span>
+            </div>
+          </div>
+        ))}
       </div>
     </Card>
   );

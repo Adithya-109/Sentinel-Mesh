@@ -6,12 +6,12 @@ import CyberMeshBackground from "../components/CyberMeshBackground";
 import TiltCard from "../components/TiltCard";
 import { useEnergy, useEvents, usePoll } from "../data";
 import { ExperimentTable, Scan } from "../experiment";
-import { Controls, GateFeed, Incidents, StatusBar, Timeline } from "../panels";
+import { Controls, DetectionChannels, GateFeed, Incidents, StatusBar, Timeline } from "../panels";
 import { Card } from "../ui";
 
 const FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";
 
-type Tab = "overview" | "events" | "incidents" | "energy" | "experiment" | "scan";
+type Tab = "overview" | "events" | "incidents" | "energy" | "experiment" | "scan" | "channels";
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "events", label: "Events" },
@@ -19,6 +19,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "energy", label: "Energy" },
   { id: "experiment", label: "Experiment" },
   { id: "scan", label: "Scan" },
+  { id: "channels", label: "Channels" },
 ];
 
 export default function Dashboard() {
@@ -29,8 +30,9 @@ export default function Dashboard() {
   const experiment = usePoll(() => api.experiment(profile), 3000);
   const { events, error: evError, resync } = useEvents();
   const { series, resync: resyncEnergy } = useEnergy();
+  const channels = usePoll(api.channels, 5000);
 
-  const refreshAll = () => { status.refresh(); incidents.refresh(); experiment.refresh(); resync(); resyncEnergy(); };
+  const refreshAll = () => { status.refresh(); incidents.refresh(); experiment.refresh(); resync(); resyncEnergy(); channels.refresh(); };
   const simulated = !!status.data?.simulated || !!series.simulated;
   const down = status.error !== null;
   const incidentBadge = incidents.data?.filter(i => i.severity === "critical" || i.severity === "high").length ?? 0;
@@ -109,6 +111,10 @@ export default function Dashboard() {
         )}
 
         {tab === "scan" && <Scan onStored={refreshAll} />}
+
+        {tab === "channels" && (
+          <DetectionChannels channels={channels.data?.channels ?? null} error={channels.error} onChange={refreshAll} />
+        )}
       </main>
     </div>
   );

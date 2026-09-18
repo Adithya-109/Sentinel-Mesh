@@ -232,6 +232,24 @@ th.num { text-align: right; }
 .note { color: var(--ink-2); font-size: 0.85rem; margin-top: 8px; }
 .sim { color: var(--warning); font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; }
 
+/* -- detection channels --------------------------------------------------- */
+.channel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 4px; }
+.channel-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.channel-card.wide { grid-column: 1 / -1; }
+.channel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.channel-toggle {
+  border: 1px solid var(--border); background: var(--page); color: var(--ink-2); border-radius: 999px;
+  padding: 3px 12px; font-size: 0.78rem; font-weight: 700; cursor: pointer; letter-spacing: 0.02em;
+}
+.channel-toggle.on { background: var(--good); color: #06281a; border-color: var(--good); }
+.channel-toggle:hover { filter: brightness(1.08); }
+.channel-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.channel-metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 0.85rem; color: var(--ink-2); }
+.badge-demo {
+  display: inline-block; background: var(--warning); color: #2b1d02; font-weight: 800; font-size: 0.7rem;
+  letter-spacing: 0.03em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; margin-top: 2px;
+}
+
 /* -- scan ---------------------------------------------------------------- */
 textarea {
   width: 100%; min-height: 130px; background: var(--page); border: 1px solid var(--axis);

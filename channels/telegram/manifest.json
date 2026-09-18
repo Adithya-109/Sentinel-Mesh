@@ -1,0 +1,14 @@
+{
+  "id": "telegram",
+  "display_name": "Telegram Guard",
+  "description": "Illustrates that the channel architecture scales to messaging platforms beyond SMS. No model has been built or trained for this channel.",
+  "status": "dummy",
+  "enabled": true,
+  "model_path": null,
+  "vectorizer_path": null,
+  "metrics": {
+    "accuracy": 0.88,
+    "trained_on": "NOT TRAINED -- placeholder number for demo purposes only"
+  },
+  "live_classify": false
+}
