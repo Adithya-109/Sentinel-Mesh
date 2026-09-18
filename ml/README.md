@@ -118,9 +118,13 @@ folder's docstrings.
 Brief v4 adds a research claim: post-quantum crypto turns the battery into
 the attack surface, so a tiny model runs *before* the handshake to decide
 whether a stranger is worth the energy. EnergyGate scores that -- it does
-not decide spend/challenge/drop itself, that policy lives on the gateway
-(firmware), which holds the live joule-budget state this model doesn't
-have. See `docs/v4_energy_split.md` for the full split.
+not decide spend/challenge/drop itself, that policy lives on field-1
+(firmware, `lib/sentinel_proto/gate_policy.h`) -- the battery-powered node it
+protects -- which holds the live joule-budget state this model doesn't
+have. To deploy a trained model, copy `export/energygate.h` to
+`firmware/lib/sentinel_proto/include/sentinel_proto/energygate_model.h`; the
+firmware picks it up automatically and feeds it features in this module's
+`FEATURE_ORDER`. See `docs/v4_energy_split.md` for the full split.
 
 Same wait condition and same data as Phase 2 -- `data/traces/*.jsonl`,
 nothing new to record:

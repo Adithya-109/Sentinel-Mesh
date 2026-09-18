@@ -20,7 +20,7 @@ owns `contracts/`.
 cd console
 py -3.12 -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
-.venv/Scripts/python -m pytest tests/ -q          # 89 passed
+.venv/Scripts/python -m pytest tests/ -q          # 92 passed
 
 cd web && npm ci && npm run build                  # React console -> web/dist
 ```
@@ -137,7 +137,7 @@ frontend-kit/  the kit as delivered: fixtures + the reference types.ts/api.ts
 ui/        Streamlit fallback UI (5 pages, incl. trace recording)
 tools/     mock_rig.py, mock_events.py, mock_serial.py -- the other streams' stand-ins
 demo/      RUNBOOK.md (read before presenting), serial_log.txt (hardware fallback)
-tests/     89 tests: rules, contract validation, API, v4, bridge, stand-ins, UI smoke
+tests/     92 tests: rules, contract validation, API, v4, bridge, stand-ins, UI smoke
 data/      console.db + traces/<session>.jsonl   (gitignored)
 ```
 

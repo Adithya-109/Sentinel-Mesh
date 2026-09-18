@@ -65,7 +65,8 @@ task below, not something to guess at further.
    `jitter_ms` separability. A clean negative result is a fine deliverable —
    write it up honestly in `reports/model_cards.md`, same rule as everything
    else in this repo.
-6. Free cleanup while you're in this folder: root `CLAUDE.md` §4 flags that
+6. Free cleanup while you're in this folder: root `CLAUDE.md` ("Facts that
+   bite every stream") flags that
    `ml/demo/run_demo.py` still defaults to `localhost` (2s/request stall on
    this Windows box vs 2.4ms for `127.0.0.1`, already fixed everywhere in
    `console/`). Fix it if you touch that file.
@@ -139,9 +140,9 @@ stream, always show `reasons`, one y-axis per chart, never colour alone).
    cross-layer signals, and nothing in the brief asks for them to form
    incidents. Revisit only if a judge-facing reason to correlate sustained
    `drop`s or a `budget_exhausted` turns up.
-9. Once the above lands, update root `CLAUDE.md` §3 (deliverables/status)
-   and §4 (hard-won facts) the way you already do — that file is written in
-   your voice. Also worth a line there about the frontend existing now, so a
+9. Once the above lands, update `console/CLAUDE.md` (deliverables/status and
+   hard-won facts) the way you already do — the root `CLAUDE.md` is now shared
+   by all three streams, and the console's own notes live in `console/`. Also worth a line there about the frontend existing now, so a
    future cold-start session doesn't miss it the way this session almost did.
 
 ## Claude 3 — `firmware/`: the energy rig + the gatekeeper (highest risk)
@@ -161,12 +162,20 @@ Flash `env:benchmark` first if that still hasn't happened.
    can't see its own battery current). Cover: ML-KEM keygen/encaps/decaps
    ×3 levels, ML-DSA-44 sign/verify, AES-256-GCM per KB, radio handshake per
    level, idle/hourly baseline.
-2. **Cookie challenge** in the gateway's handshake path: 8-byte value
+> **Correction (2026-09-18, after the firmware landed):** items 2 and 3 below
+> originally said "the gateway". Brief v4 puts EnergyGate on the battery-powered
+> **field node** it protects (sections 1-4; the INA219 is on the field node's
+> battery line), and the gateway is USB-powered, so gating there protected
+> nothing the rig measures. The firmware now runs items 2-3 on field-1; the
+> gateway relays `DEFENSE` to it and its decisions back to the console. See
+> `contracts/CHANGELOG.md`, "EnergyGate moves from the gateway to field-1".
+
+2. **Cookie challenge** in field-1's handshake path: 8-byte value
    derived from a secret + sender id + time; refuse to reassemble until it's
    echoed back. This part isn't novel (DTLS-style) — the brief says so —
    keep it a small, host-testable addition to `lib/sentinel_proto` alongside
    `replay.h`, same convention as everything else there.
-3. **Energy token bucket + EnergyGate integration** on the gateway: joules,
+3. **Energy token bucket + EnergyGate integration** on field-1: joules,
    refills over time. Track the new free signals as you go (battery_pct,
    frag_complete_pct, dup_pct — matching the Trace v4 fields) so the
    features you feed `energygate_score()` (from Claude 1's export, once it

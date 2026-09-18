@@ -25,6 +25,50 @@ and the file contents re-verified end to end, but nobody has actually run
 `g++` on it yet. Run `tools/run_native_tests.sh` as the very first thing
 after pulling this and before building on top of it.
 
+**Update (2026-09-18): EnergyGate moved from the gateway to field-1.** Brief
+v4 puts it on the battery-powered node being drained (sections 1-4; the
+INA219 is on the field node's battery line), and the gateway is USB-powered,
+so gating there protected nothing the rig measures. Now:
+- **field-1** answers inbound `HELLO`s and runs the whole admission path --
+  `energygate_score()` + the joule budget + the cookie -- through the new
+  host-tested `lib/sentinel_proto/gate_policy.h`, which also implements the
+  four `DEFENSE` modes (none / ratelimit / cookie / gate) the five-row
+  experiment needs. Its `battery_pct` feature is its own ADC reading. It
+  raises `PIN_ENERGY_MARKER` around each decision so the monitor measures
+  EnergyGate's own cost (brief section 3).
+- **gateway** relays: `DEFENSE <mode>` from the console -> a `CONTROL` mesh
+  message to field-1 (on change and every 30 s); field-1's `GATE_REPORT`
+  messages -> the console's `gate_decision` / `budget_exhausted` events,
+  `"node": "field-1"`. New payloads in `lib/sentinel_proto/gate_msgs.h`,
+  new `MsgType`s `GATE_REPORT` (0x07) and `CONTROL` (0x08). It keeps the
+  signed-handshake check, replay window, trace windows and lockout.
+- **attacker** `FLOOD` / `SLOW_DRIP` aim at field-1 (broadcast, so the
+  gateway still overhears them for its trace windows).
+- **monitor** also prints a ~1 Hz `NRG <json>` line (contracts/
+  energy.schema.json) -- it previously printed only per-operation CSV, so
+  the console's battery chart had no real data.
+- **Feature order fixed.** The stand-in read its 8 features in a different
+  order from `ml/sentinel_ml/energygate.py`'s `FEATURE_ORDER`, which the real
+  model is trained on. Verified: with the old order, an exported model
+  mis-scored 90 of 450 rows (every replay window scored as genuine); with
+  the new order, 0 of 450 differ from Python's `predict_proba`. To use the
+  trained model, copy `ml/export/energygate.h` to
+  `lib/sentinel_proto/include/sentinel_proto/energygate_model.h` --
+  `energygate.cpp` compiles it in automatically, and field-1 logs which
+  scorer it is running at boot.
+
+Verified for real this time: **283/283 host assertions pass** under `g++`
+(the v4 ones had never actually been run), and `pio run` **compiles
+field_node, gateway, attacker and monitor for the ESP32**. Before this
+change none of the five envs compiled: wolfSSL (listed for every board but
+used only by the benchmark) failed with "Found both ESPIDF and ARDUINO", the
+gateway passed `String` where `const char*` was needed, and the monitor
+used `board::` without `using namespace sentinel`. wolfSSL is now scoped to
+`env:benchmark`. **`env:benchmark` still does not compile** -- the same
+wolfSSL clash plus PQC API names (`KyberKey`, `wc_dilithium_*`) that don't
+match the installed wolfSSL. That is the project's known go/no-go crypto
+risk and was not touched here.
+
 ## v4 energy work (docs/v4_energy_split.md)
 
 Firmware's slice, in the order it was built:
@@ -46,12 +90,14 @@ Firmware's slice, in the order it was built:
 3. **EnergyGate rule-based stand-in** (`lib/sentinel_proto/energygate.h`,
    `energygate_score()`) — same pattern as `field_model.h`'s
    `classify_window()`: a placeholder with the exact signature Claude 1's
-   real `ml/export/energygate.h` will export, so the gateway call site
-   doesn't change when that lands. Host-tested (3 new assertions): a
+   real `ml/export/energygate.h` will export, so field-1's call site
+   doesn't change when that lands (see the 2026-09-18 update above for the
+   feature-order fix and the automatic model hook). Host-tested (3 new assertions): a
    healthy-looking sender scores high, a flooding one scores low, output
    stays in [0,1] at extreme inputs.
-4. **Gateway wiring** (`src/gateway/main.cpp`) — every incoming `HELLO`
-   now runs EnergyGate *before* any signature-verification work: builds
+4. **Admission wiring** — *superseded: now on field-1, see the 2026-09-18
+   update above.* Originally in `src/gateway/main.cpp`: every incoming `HELLO`
+   ran EnergyGate *before* any signature-verification work: builds
    the 8-feature vector from this window's counters, scores it, spends
    from the token bucket (or challenges, or drops) based on
    `GATE_SPEND_THRESHOLD`/`GATE_CHALLENGE_THRESHOLD`, and emits a
@@ -84,13 +130,19 @@ Firmware's slice, in the order it was built:
 
 **Still open from `docs/v4_energy_split.md`**, not attempted this round
 (need real hardware or a team decision first):
-- The `mode`/`attack` serial line format for the new frontend's `POST
-  /mode`/`POST /attack` — coordinate with Claude 2, who owns the freeze;
-  `handle_console_line()` has a TODO marking where it goes.
-- `PLACEHOLDER_HANDSHAKE_COST_J` / `ENERGY_BUDGET_CAPACITY_J` /
-  `ENERGY_BUDGET_REFILL_J_PER_S` in `gateway/main.cpp` are guesses — the
-  5-row experiment and real cost table wait on the energy rig existing on
-  real boards.
+- ~~The `mode`/`attack` serial line format~~ -- settled in
+  contracts/CONTRACT.md (`DEFENSE <mode>`, the attacker's existing `MODE`
+  lines); the gateway now parses `DEFENSE` and relays it to field-1.
+- `GatePolicyConfig::handshake_cost_j` (gate_policy.h) and
+  `ENERGY_BUDGET_CAPACITY_J` / `ENERGY_BUDGET_REFILL_J_PER_S` in
+  `field_node/main.cpp` are guesses -- the 5-row experiment and real cost
+  table wait on the energy rig existing on real boards.
+- The mesh transport (ESP-NOW) is still a stub on every board, so none of
+  the messages above actually travel yet; the HELLO framing has no slot for
+  the cookie echo yet (`cookie_echoed` is always false until it does).
+- EnergyGate's training windows are recorded at the gateway; it runs at
+  field-1, whose view of RSSI differs. Same feature definitions, different
+  vantage point -- record field-1-side windows if the scores look off.
 - Radio fingerprinting (stretch, brief's own cut order puts it first to
   cut) — not started.
 

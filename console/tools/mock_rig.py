@@ -9,7 +9,8 @@ Once a second it:
   * reads GET /control (the same state the serial bridge relays to real boards);
   * posts one power sample to POST /energy whose draw depends on the current
     defence x attack combination, and drains a simulated battery accordingly;
-  * posts the events the gateway would raise: gate_decision (EnergyGate mode
+  * posts the events the gateway would relay: gate_decision (field-1 runs
+    EnergyGate on inbound HELLOs; the gateway forwards its decisions -- EnergyGate mode
     only), energy_alert when draw spikes, budget_exhausted if the token bucket
     empties, and replay/impersonation rejections for those attack profiles;
   * posts a Trace row every few seconds, so /status sees the gateway alive and
@@ -144,10 +145,12 @@ class Rig:
         return mode, attack, draw
 
     def gate(self, attack: str):
-        # a legitimate reading from field-1 every 10 s
+        # the genuine gateway handshaking with field-1 every 10 s -- EnergyGate
+        # runs on field-1, so the legitimate sender it must still let through
+        # is the gateway (brief v4 beat 4: "a genuine node still gets through")
         if self.tick % 10 == 0:
-            self.decide("spend", self.rng.uniform(0.88, 0.97), "field-1",
-                        ["known sender field-1", "fragments 100% complete",
+            self.decide("spend", self.rng.uniform(0.88, 0.97), "gateway",
+                        ["known sender gateway", "fragments 100% complete",
                          f"RSSI steady ({self.rng.randint(-56, -47)} dBm)"])
         every = ATTEMPT_EVERY_S.get(attack)
         if every and self.tick % every == 0:
@@ -167,11 +170,11 @@ class Rig:
         sev = {"spend": "info", "challenge": "low", "drop": "medium"}[action]
         self.event("gate_decision", sev, f"EnergyGate: {action.upper()} {sender}", reasons,
                    {"action": action, "sender": sender, "budget_j": round(self.budget_j, 2),
-                    "budget_max_j": BUDGET_MAX_J}, score=round(prob_real, 3))
+                    "budget_max_j": BUDGET_MAX_J}, score=round(prob_real, 3), node="field-1")
         if self.budget_j <= 0 and not self.exhausted_sent:
             self.exhausted_sent = True
             self.event("budget_exhausted", "high", "EnergyGate budget exhausted",
-                       ["token bucket empty", "further handshakes deferred until refill"], {})
+                       ["token bucket empty", "further handshakes deferred until refill"], {}, node="field-1")
 
 
 def main():

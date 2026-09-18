@@ -8,7 +8,7 @@ The controls only change console state. Getting it to the boards is the serial
 bridge's job: it polls GET /control and, when a *_version changes, sends the
 line to every bridged port (CONTRACT.md, "Serial lines"):
 
-    POST /mode   {mode}     ->  DEFENSE <none|ratelimit|cookie|gate>   (gateway)
+    POST /mode   {mode}     ->  DEFENSE <none|ratelimit|cookie|gate>   (gateway, relayed to field-1)
     POST /attack {profile}  ->  MODE <OFF|FLOOD|SLOW_DRIP|...>          (attacker)
 """
 from typing import Any, Optional

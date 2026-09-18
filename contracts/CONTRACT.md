@@ -58,7 +58,11 @@ acts on its own commands and ignores the rest (both current boards already do).
   (`ts` and `battery_pct` optional).
 - console -> gateway: `DEFENSE <none|ratelimit|cookie|gate>` -- which admission
   defence runs in front of the handshake. (Not `MODE`: the attacker board already
-  uses `MODE` for attack modes.)
+  uses `MODE` for attack modes.) **EnergyGate runs on field-1**, the battery-powered
+  node whose battery the INA219 measures (brief v4 sections 1-4) -- not on the
+  USB-powered gateway. field-1 has no serial link during a run, so the gateway
+  relays `DEFENSE` to it over the mesh, and relays field-1's decisions back to the
+  console as `gate_decision` / `budget_exhausted` events with `"node": "field-1"`.
 - console -> attacker: the attacker's existing `MODE <...>` commands.
   `POST /attack {profile}` maps `none`->`MODE OFF`, `loud`->`MODE FLOOD`,
   `slow_drip`->`MODE SLOW_DRIP` (new), `replay`->`MODE REPLAY`,

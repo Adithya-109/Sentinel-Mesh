@@ -31,6 +31,8 @@
 #include <Adafruit_INA219.h>
 #include "common/board_config.h"
 
+using namespace sentinel; // board:: lives in sentinel::board (common/board_config.h)
+
 static Adafruit_INA219 g_ina219;
 static bool g_ina219_ok = false;
 
@@ -47,6 +49,17 @@ static double g_interval_energy_uj = 0.0; // accumulated over the current marked
 static float g_interval_peak_ma = 0.0f;
 static uint32_t g_op_index = 0;
 static uint32_t g_last_sample_us = 0;
+
+// v4: continuous telemetry for the console's battery chart -- one
+// `NRG <json>` line per second (contracts/CONTRACT.md "Serial lines",
+// contracts/energy.schema.json), alongside the per-operation CSV above.
+// Without it the console's power/battery charts have no real data.
+constexpr uint32_t NRG_INTERVAL_US = 1000000;
+static uint32_t g_nrg_start_us = 0;
+static double g_nrg_energy_mj = 0.0;  // integral of power over the interval
+static double g_nrg_seconds = 0.0;
+static float g_last_load_v = 0.0f;
+static float g_last_current_ma = 0.0f;
 
 // Reports a completed interval. CSV columns extend the src/benchmark shape
 // (algo,op,us,heap_used_bytes,stack_hwm_bytes,ok) with the two columns
@@ -86,10 +99,43 @@ static void sample_ina219(double dt_s) {
     float load_v = bus_v + (shunt_mv / 1000.0f);
     float power_mw = load_v * current_ma; // V * mA = mW
 
+    g_nrg_energy_mj += static_cast<double>(power_mw) * dt_s;
+    g_nrg_seconds += dt_s;
+    g_last_load_v = load_v;
+    g_last_current_ma = current_ma;
+
     if (g_marker_active) {
         g_interval_energy_uj += static_cast<double>(power_mw) * dt_s * 1000.0; // mW*s = mJ, *1000 -> uJ
         if (current_ma > g_interval_peak_ma) g_interval_peak_ma = current_ma;
     }
+}
+
+// Battery % from the cell voltage. The INA219 sits on the raw battery lead
+// (docs/hardware_setup.md), so its load voltage is the cell's. An estimate --
+// voltage sags under load -- which is why battery_pct is optional in the schema.
+static float battery_pct_from_volts(float v) {
+    float pct = (v - board::BATTERY_EMPTY_V) / (board::BATTERY_FULL_V - board::BATTERY_EMPTY_V) * 100.0f;
+    if (pct < 0.0f) pct = 0.0f;
+    if (pct > 100.0f) pct = 100.0f;
+    return pct;
+}
+
+static void emit_nrg_line() {
+    if (!g_ina219_ok || g_nrg_seconds <= 0.0) return;
+    double mean_mw = g_nrg_energy_mj / g_nrg_seconds;
+    g_nrg_energy_mj = 0.0;
+    g_nrg_seconds = 0.0;
+    if (mean_mw < 0.0) {
+        // Negative current usually means the shunt is wired backwards. The
+        // schema rejects negative power, so say so instead of sending it.
+        Serial.println("LOG monitor: negative power -- is the INA219 wired VIN+/VIN- backwards?");
+        return;
+    }
+    // ts is uptime millis(); the console swaps in arrival time (CONTRACT.md "Timestamps").
+    Serial.printf("NRG {\"ts\":%lu,\"power_mw\":%.1f,\"volts\":%.3f,\"amps\":%.4f,\"battery_pct\":%.1f}\n",
+                  static_cast<unsigned long>(millis()), mean_mw, static_cast<double>(g_last_load_v),
+                  static_cast<double>(g_last_current_ma) / 1000.0,
+                  static_cast<double>(battery_pct_from_volts(g_last_load_v)));
 }
 
 void setup() {
@@ -110,6 +156,7 @@ void setup() {
     Serial.println("LOG monitor boot complete");
     Serial.println("monitor,op,us,mJ,peak_current_mA");
     g_last_sample_us = micros();
+    g_nrg_start_us = g_last_sample_us;
 }
 
 void loop() {
@@ -119,5 +166,9 @@ void loop() {
         sample_ina219(dt_s);
         poll_marker(now_us);
         g_last_sample_us = now_us;
+    }
+    if (now_us - g_nrg_start_us >= NRG_INTERVAL_US) {
+        emit_nrg_line();
+        g_nrg_start_us = now_us;
     }
 }

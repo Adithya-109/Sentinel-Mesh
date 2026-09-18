@@ -20,7 +20,7 @@ contaminate the number).
 |---|---|---|
 | Field node | Runs the crypto, the thing being measured | 18650 cell, via the rig below |
 | Gateway | Receives the field node's traffic | USB (its battery life isn't the point) |
-| Attacker | Sends HELLO floods / slow drip | USB |
+| Attacker | Sends HELLO floods / slow drip **at the field node** (the gateway overhears them for its trace windows) | USB |
 | **Monitor (new)** | Reads the INA219, logs mJ per operation | USB (it's instrumentation) |
 
 ## Power path — battery → field node

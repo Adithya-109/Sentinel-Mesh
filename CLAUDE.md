@@ -63,10 +63,19 @@ Sources of truth: the team briefs (v3; v4 summarised in
   `new_event()` takes `uint32_t` (epoch ms does not fit). The console replaces any
   `ts` below 1e12 with arrival time and keeps the original as
   `details.device_ts`, so boards need not sync time.
+- **EnergyGate runs on field-1, not the gateway.** It protects the battery the
+  INA219 measures, and the gateway is USB-powered. field-1 answers inbound
+  `HELLO`s and runs the score, joule budget, cookie and spend/challenge/drop
+  policy; the attacker's flood targets it. The gateway relays the console's
+  `DEFENSE <none|ratelimit|cookie|gate>` to field-1 over the mesh and relays
+  field-1's decisions back as `gate_decision` events with `"node": "field-1"`.
+  (An early plan put it on the gateway; brief v4 sections 1-4 say otherwise.)
 - **`MODE` belongs to the attacker board** (`MODE REPLAY|FLOOD|...`). The
-  gateway's defence setting is `DEFENSE <none|ratelimit|cookie|gate>`. The
-  console sends every control line to every board; boards ignore lines that
-  are not theirs.
+  console sends every control line to every board it is connected to; boards
+  ignore lines that are not theirs.
+- **EnergyGate's 8 features use `ml/sentinel_ml/energygate.py`'s
+  `FEATURE_ORDER`** on both sides: `hs_per_s, hs_fail, rssi_mean, rssi_var,
+  loss_pct, dup_pct, frag_complete_pct, battery_pct`.
 - **The raw `security/` dataset is not in the repo** (and not on every
   machine). Anything taking `--data` needs its path from the human. Trained
   models are committed.

@@ -3,16 +3,19 @@
 // Modes, selected over USB serial (so it can be driven from the console or
 // a terminal during the demo), per the brief:
 //   MODE REPLAY        capture the next packet seen, then replay it on repeat
-//   MODE FLOOD          handshake flood (spam HELLOs)
+//   MODE FLOOD          handshake flood (spam HELLOs) at field-1 -- the
+//                        battery-powered node EnergyGate protects (brief v4
+//                        "drain attack"). Sent as broadcast, so the gateway
+//                        overhears it for its trace windows / FieldGuard.
 //   MODE IMPERSONATE    spoof the field node's sender id with the attacker's
 //                        own keys (should fail signature/HMAC verification
 //                        on the gateway, which is the point — see brief
 //                        threat model)
 //   MODE WEAK_LINK      simulate a degraded link (drop/delay/jitter its own
 //                        traffic) rather than attacking outright
-//   MODE SLOW_DRIP      v4: ~1 handshake/min -- stays under any fixed rate
-//                        limit but still drains the energy budget over time
-//                        (brief v4 / docs/v4_energy_split.md task 4)
+//   MODE SLOW_DRIP      v4: ~1 handshake/min at field-1 -- stays under any
+//                        fixed rate limit but still drains the battery over
+//                        time (brief v4 section 6)
 //   MODE OFF             stop whatever mode is running
 //
 // This only needs to construct and send plausible-looking packets; it does
@@ -82,10 +85,11 @@ static void tick_flood() {
 
     uint8_t buf[HEADER_SIZE];
     hdr.serialize(buf, sizeof(buf));
-    // TODO: send `buf` (no valid signature attached) on the mesh transport.
-    // Expected gateway behavior: handshake_rejected per-packet, and
-    // attack_detected with details.kind = "handshake_flood" once the rate
-    // crosses the classify_window() threshold.
+    // TODO: broadcast `buf` (no valid signature attached) on the mesh
+    // transport. Expected: field-1's EnergyGate rules on every one
+    // (gate_decision events via the gateway, "node": "field-1"), and the
+    // gateway's trace window crosses classify_window()'s threshold ->
+    // attack_detected with details.kind = "handshake_flood".
     delay(50); // fast enough to trip hs_per_s thresholds, not so fast it starves the radio
 }
 
@@ -123,14 +127,13 @@ static void tick_slow_drip() {
 
     uint8_t buf[HEADER_SIZE];
     hdr.serialize(buf, sizeof(buf));
-    // TODO: send `buf` on the mesh transport, same as tick_flood(). At
-    // ~1/min this shouldn't trip classify_window()'s hs_per_s/hs_fail
+    // TODO: broadcast `buf` on the mesh transport, same as tick_flood().
+    // At ~1/min this shouldn't trip classify_window()'s hs_per_s/hs_fail
     // FLOOD threshold (field_model.h) -- that's the point, per brief
-    // section 6: demonstrates why a plain rate limit isn't enough and
-    // EnergyGate's budget-over-time view is needed instead. Expected
-    // gateway behavior: individually unremarkable gate_decision events,
-    // but the energy budget trends down over the demo's run instead of
-    // holding steady the way idle/normal traffic does.
+    // section 6: a fixed rate limit lets it through (gate_policy.h's
+    // RATELIMIT mode admits it), so it is where EnergyGate has to earn its
+    // place. Expected: individually unremarkable gate_decision events from
+    // field-1, while field-1's battery trends down over the run.
     (void)buf;
 }
 

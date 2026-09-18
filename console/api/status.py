@@ -66,7 +66,7 @@ def _crypto_level(conn: sqlite3.Connection) -> Optional[int]:
 
 
 def _budget(conn: sqlite3.Connection) -> tuple[Optional[float], Optional[float]]:
-    """Latest bucket state the gateway reported (gate_decision details), or 0
+    """Latest bucket state field-1 reported via the gateway (gate_decision details), or 0
     after a budget_exhausted that is newer than the last decision."""
     r = conn.execute(
         """SELECT type, details FROM events WHERE type IN ('gate_decision', 'budget_exhausted')

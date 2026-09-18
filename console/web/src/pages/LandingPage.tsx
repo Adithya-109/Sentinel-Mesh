@@ -60,7 +60,7 @@ const STACK = [
 const STEPS = [
   { n: "01", tag: "FREE", title: "Stranger says hello", body: "The incoming radio frame costs the node nothing to receive. The node registers the attempt and forwards free signal metadata to EnergyGate." },
   { n: "02", tag: "EVALUATE", title: "EnergyGate model", body: "A decision tree checks RSSI variance, completion history and the remaining joule budget. Inference runs in microseconds directly on the ESP32." },
-  { n: "03", tag: "DECIDE", title: "Tactical action", body: "The gateway drops the packet, issues an 8-byte cookie challenge, or spends battery energy on the full post-quantum handshake." },
+  { n: "03", tag: "DECIDE", title: "Tactical action", body: "The field node drops the packet, issues an 8-byte cookie challenge, or spends its battery on the full post-quantum handshake." },
 ];
 
 function Logo() {
