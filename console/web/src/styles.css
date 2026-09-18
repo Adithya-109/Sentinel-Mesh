@@ -76,14 +76,14 @@ a { color: inherit; text-decoration: none; }
 .back-link { color: var(--muted); font-size: 0.82rem; padding: 10px 12px; }
 .back-link:hover { color: var(--ink-2); }
 
-.main { flex: 1; min-width: 0; padding: 16px 22px 40px; max-width: 1500px; }
-.topbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.main { flex: 1; min-width: 0; padding: 22px 30px 48px; max-width: 1500px; }
+.topbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
 .conn { font-size: 0.85rem; color: var(--ink-2); }
 .conn.bad { color: var(--critical); font-weight: 600; }
 
 .banner {
   border: 2px solid var(--warning); color: var(--warning); background: rgba(219, 161, 54, 0.08);
-  border-radius: 10px; padding: 8px 14px; margin-bottom: 12px; font-weight: 600;
+  border-radius: 10px; padding: 10px 16px; margin-bottom: 18px; font-weight: 600;
 }
 .banner.fixtures { border-color: var(--s1); color: #9ec5f4; background: rgba(56, 189, 248, 0.10); }
 
@@ -91,7 +91,7 @@ a { color: inherit; text-decoration: none; }
 @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-  padding: 16px 18px; min-width: 0; margin-bottom: 14px;
+  padding: 20px 22px; min-width: 0; margin-bottom: 18px;
   box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.6);
   animation: cardIn 0.35s ease-out both;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -113,21 +113,22 @@ a { color: inherit; text-decoration: none; }
 .brand-mark { transition: transform 0.3s ease; }
 .brand:hover .brand-mark { transform: rotate(8deg) scale(1.06); }
 .card h2 {
-  font-size: 1.02rem; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: 1.02rem; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--warning); display: flex; align-items: center; gap: 10px; font-weight: 800;
-  border-bottom: 1px solid var(--border); padding-bottom: 10px;
+  border-bottom: 1px solid var(--border); padding-bottom: 14px;
 }
 .card h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); font-size: 0.85rem; }
 
 .full { margin-top: 4px; }
-.grid-main { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 14px; margin-top: 4px; }
+.grid-main { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 20px; margin-top: 8px; }
 .col { display: flex; flex-direction: column; min-width: 0; }
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 1150px) {
   .grid-main, .row2 { grid-template-columns: 1fr; }
   .dashboard-shell { flex-direction: column; }
-  .sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; }
-  .tabs { flex-direction: row; }
+  .sidebar { width: 100%; flex-direction: row; align-items: center; flex-wrap: wrap; overflow-x: visible; padding: 12px 16px; }
+  .tabs { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .tab { padding: 8px 12px; font-size: 0.78rem; }
   .brand-sub, .back-link { display: none; }
 }
 
@@ -141,15 +142,21 @@ a { color: inherit; text-decoration: none; }
 .chip.big { font-size: 1.05rem; padding: 4px 14px; }
 
 /* -- status bar ---------------------------------------------------------- */
-.statusbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; }
+/* Explicit column counts, not auto-fit -- auto-fit's own math would let the
+   6th tile spill onto an awkward lonely second row at plenty of ordinary
+   desktop widths (it did, at 1280px). A fixed count per breakpoint always
+   ends on a clean row. */
+.statusbar { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 20px; }
+@media (min-width: 640px) { .statusbar { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1300px) { .statusbar { grid-template-columns: repeat(6, 1fr); } }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; height: 100%; }
 .stat .k { font-size: 0.78rem; color: var(--warning); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
-.stat .v { font-size: 1.9rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat .v { font-size: 1.9rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; margin-top: 8px; }
 .stat .v small { font-size: 0.95rem; font-weight: 500; color: var(--ink-2); }
-.stat .m { font-size: 0.85rem; color: var(--ink-2); }
-.budget { height: 10px; border-radius: 5px; background: var(--axis); margin-top: 6px; overflow: hidden; }
+.stat .m { font-size: 0.85rem; color: var(--ink-2); margin-top: 4px; }
+.budget { height: 10px; border-radius: 5px; background: var(--axis); margin-top: 10px; overflow: hidden; }
 .budget > div { height: 100%; background: var(--s3); }
-.nodes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.nodes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 
 /* -- controls ------------------------------------------------------------ */
 .controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
