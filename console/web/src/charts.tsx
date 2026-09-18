@@ -11,11 +11,12 @@ import type { EnergySeries, Experiment } from "./types";
 import { fmtTime } from "./ui";
 
 // SVG presentation attributes do not reliably resolve CSS var(), so the chart
-// uses the same hex values as the :root tokens in styles.css.
+// uses the same hex values as the site palette in styles.css / dashboard.css.
 const C = {
-  ink: "#ffffff", ink2: "#e2d5de", muted: "#a08595", grid: "#3d1433", axis: "#4a1f40",
-  s1: "#38bdf8", s2: "#e04c1e", s3: "#10b981",
-  power: "#e04c1e", battery: "#38bdf8",
+  ink: "#000000", ink2: "#4d4d4d", muted: "#5e5e5e", grid: "#e4e6ee", axis: "#bfbfbf",
+  page: "#ffffff",
+  s1: "#3f6fd6", s2: "#ee0000", s3: "#32006f",
+  power: "#32006f", battery: "#3f6fd6",
 };
 
 const axisProps = {
@@ -160,10 +161,10 @@ export function ProjectionChart({ exp }: { exp: Experiment | null }) {
 
   return (
     <div>
-      <div className="chart-title">
-        Projected battery life by condition {simulated && <span className="sim">&nbsp;SIMULATED &mdash; do not quote</span>}
+      <div className="chart-sub">
+        {simulated && <><span className="sim">SIMULATED &mdash; do not quote</span><br /></>}
+        Projected from each experiment run's measured mean draw, on an assumed full cell &mdash; an estimate, not a measurement of a full discharge.
       </div>
-      <div className="chart-sub">from each experiment run's measured mean draw, on an assumed full cell &mdash; an estimate, not a measurement of a full discharge</div>
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={data} margin={{ top: 16, right: 60, bottom: 4, left: 0 }}>
           <CartesianGrid vertical={false} stroke={C.grid} />
@@ -175,7 +176,7 @@ export function ProjectionChart({ exp }: { exp: Experiment | null }) {
               strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
           ))}
           {lines.map(l => (
-            <ReferenceDot key={`${l.condition}-end`} x={days(l)} y={0} r={5} fill={l.color} stroke="#1a1a19" strokeWidth={2}
+            <ReferenceDot key={`${l.condition}-end`} x={days(l)} y={0} r={5} fill={l.color} stroke={C.page} strokeWidth={2}
               label={{ value: `${days(l).toFixed(1)} d`, position: "top", fill: C.ink, fontSize: 13 }} />
           ))}
         </LineChart>

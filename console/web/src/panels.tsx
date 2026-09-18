@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { api } from "./api";
-import TiltCard from "./components/TiltCard";
 import type { AttackProfile, Incident, Mode, SmEvent, Stage, Status } from "./types";
-import { ACTION, Card, Chip, EventRow, fmtNum, fmtTime, LINK, NODE, SeverityChip, techniqueName } from "./ui";
+import { ACTION, Card, Chip, EventRow, fmtNum, fmtTime, LINK, NODE, SeverityChip, techniqueLabel } from "./ui";
 
 // -- status bar ---------------------------------------------------------------
 
@@ -10,11 +9,12 @@ export function StatusBar({ s }: { s: Status | null }) {
   if (!s) return <div className="statusbar"><div className="stat"><div className="k">status</div><div className="v">&mdash;</div></div></div>;
   const multiple = s.power_mw !== null && s.baseline_mw ? s.power_mw / s.baseline_mw : null;
   const budgetPct = s.budget_j !== null && s.budget_max_j ? Math.max(0, Math.min(100, (100 * s.budget_j) / s.budget_max_j)) : null;
+  const life = s.projected_days;
   return (
     <div className="statusbar">
-      <TiltCard maxTilt={3} glare={false}><div className="stat">
+      <div className="stat">
         <div className="k">Field link</div>
-        <div style={{ marginTop: 6 }}><Chip spec={LINK[s.link]} big /></div>
+        <div style={{ marginTop: 10 }}><Chip spec={LINK[s.link]} big /></div>
         <div className="nodes">
           {s.nodes.map(n => (
             <Chip key={n.id} spec={NODE[n.state]}>
@@ -22,35 +22,27 @@ export function StatusBar({ s }: { s: Status | null }) {
             </Chip>
           ))}
         </div>
-      </div></TiltCard>
-      <TiltCard maxTilt={3} glare={false}><div className="stat">
+      </div>
+      <div className="stat" title={`Estimate: measured draw against an assumed ${s.projection_assumes_wh ?? "?"} Wh cell`}>
         <div className="k">Battery</div>
         <div className="v">{fmtNum(s.battery_pct, 1, "%")}</div>
-        <div className="m">crypto {s.crypto_level ? `ML-KEM-${s.crypto_level}` : "—"}</div>
-      </div></TiltCard>
-      <TiltCard maxTilt={3} glare={false}><div className="stat">
+        <div className="m">
+          {life !== null ? <>about <b>{life.toFixed(life < 10 ? 1 : 0)} days</b> left at this draw (est.)</> : "no draw reading yet"}
+        </div>
+      </div>
+      <div className="stat">
         <div className="k">Draw now</div>
         <div className="v">{fmtNum(s.power_mw, 0, "mW")}</div>
         <div className="m">
           {multiple !== null ? <><b>{multiple.toFixed(1)}&times;</b> idle ({s.baseline_mw?.toFixed(0)} mW)</> : "no idle baseline yet"}
         </div>
-      </div></TiltCard>
-      <TiltCard maxTilt={3} glare={false}><div className="stat" title={`Estimate: measured draw against an assumed ${s.projection_assumes_wh ?? "?"} Wh cell`}>
-        <div className="k">Projected life (est.)</div>
-        <div className="v">{fmtNum(s.projected_days, s.projected_days !== null && s.projected_days < 10 ? 1 : 0, "days")}</div>
-        <div className="m">at idle: {s.projected_days_idle !== null ? `${s.projected_days_idle.toFixed(1)} days` : "—"}</div>
-      </div></TiltCard>
-      <TiltCard maxTilt={3} glare={false}><div className="stat">
+      </div>
+      <div className="stat">
         <div className="k">EnergyGate budget</div>
         <div className="v">{fmtNum(s.budget_j, 1, s.budget_max_j ? `/ ${s.budget_max_j} J` : "J")}</div>
         {budgetPct !== null ? <div className="budget"><div style={{ width: `${budgetPct}%` }} /></div>
           : <div className="m">reported by field-1 (via the gateway) once EnergyGate runs</div>}
-      </div></TiltCard>
-      <TiltCard maxTilt={3} glare={false}><div className="stat">
-        <div className="k">Defence / attack</div>
-        <div className="v" style={{ fontSize: "1.25rem", marginTop: 4 }}>{MODE_LABEL[s.mode]}</div>
-        <div className="m">attack: <b>{ATTACK_LABEL[s.attack_profile]}</b></div>
-      </div></TiltCard>
+      </div>
     </div>
   );
 }
@@ -70,9 +62,9 @@ export function Controls({ s, onChange }: { s: Status | null; onChange: () => vo
     try { await fn(); setErr(null); onChange(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
   };
   return (
-    <div className="card full">
+    <div className="card">
       <div className="controls">
-        <div>
+        <div className="ctl">
           <span className="ctl-label">Defence</span>
           <span className="seg">
             {MODES.map(m => (
@@ -80,7 +72,7 @@ export function Controls({ s, onChange }: { s: Status | null; onChange: () => vo
             ))}
           </span>
         </div>
-        <div>
+        <div className="ctl">
           <span className="ctl-label">Attack</span>
           <span className="seg">
             {ATTACKS.map(a => (
@@ -88,13 +80,13 @@ export function Controls({ s, onChange }: { s: Status | null; onChange: () => vo
             ))}
           </span>
         </div>
-        <span className="line">relayed to the boards over serial as DEFENSE / MODE lines (~1 s)</span>
         <span style={{ flex: 1 }} />
-        <button className="btn" onClick={() => { if (confirm("Clear events and energy samples, and switch the controls off? Finished experiment rows are kept.")) act(api.reset); }}>
+        <button className="btn ghost" title="Controls reach the boards over serial as DEFENSE / MODE lines (about 1 s)"
+          onClick={() => { if (confirm("Clear events and energy samples, and switch the controls off? Finished experiment rows are kept.")) act(api.reset); }}>
           Reset demo
         </button>
       </div>
-      {err && <div className="err" style={{ marginTop: 8 }}>{err}</div>}
+      {err && <div className="err" style={{ marginTop: 14 }}>{err}</div>}
     </div>
   );
 }
@@ -106,9 +98,9 @@ const STAGES: { key: Stage; label: string }[] = [
   { key: "field", label: "Field network" }, { key: "physical", label: "Physical" },
 ];
 
-export function Incidents({ incidents, error }: { incidents: Incident[] | null; error: string | null }) {
+export function Incidents({ incidents, error, bare }: { incidents: Incident[] | null; error: string | null; bare?: boolean }) {
   return (
-    <Card title="Incidents" hint="correlation is rules, not ML — the ML is in the detectors">
+    <Card title="Incidents" hint="correlation is rules, not ML — the ML is in the detectors" bare={bare}>
       {error && <div className="err">{error}</div>}
       {!incidents?.length ? (
         <div className="empty">No incidents. Clean scans, rekeys and EnergyGate decisions never form one.</div>
@@ -134,7 +126,7 @@ export function Incidents({ incidents, error }: { incidents: Incident[] | null; 
           {inc.escalated_by?.length ? (
             <div className="why"><b>Why {inc.severity}:</b> base {inc.base_severity} &rarr; {inc.severity} &mdash; {inc.escalated_by.join("; ")}</div>
           ) : null}
-          <div>{inc.techniques.map(t => <span key={t} className="tag">{techniqueName(t)}</span>)}</div>
+          <div>{inc.techniques.map(t => <span key={t} className="tag" title={t}>{techniqueLabel(t)}</span>)}</div>
         </div>
       ))}
     </Card>
@@ -150,13 +142,13 @@ export function GateFeed({ events }: { events: SmEvent[] }) {
   }, {});
   return (
     <Card title="EnergyGate decisions" hint="one per admission decision · P(real) is the model's probability the sender is genuine">
-      <div className="legend" style={{ marginBottom: 6 }}>
+      <div className="legend" style={{ marginBottom: 10 }}>
         {(["spend", "challenge", "drop"] as const).map(a => (
           <span key={a}><Chip spec={ACTION[a]} /> <b>{counts[a] ?? 0}</b></span>
         ))}
       </div>
       <div className="feed short">
-        {gate.length ? gate.slice(0, 60).map(e => <EventRow key={e.id} e={e} />)
+        {gate.length ? gate.slice(0, 60).map(e => <EventRow key={e.id} e={e} compact />)
           : <div className="empty">No decisions yet. Switch the defence to EnergyGate while an attack runs.</div>}
       </div>
     </Card>
@@ -165,11 +157,11 @@ export function GateFeed({ events }: { events: SmEvent[] }) {
 
 // -- timeline -----------------------------------------------------------------------
 
-export function Timeline({ events, error }: { events: SmEvent[]; error: string | null }) {
+export function Timeline({ events, error, bare }: { events: SmEvent[]; error: string | null; bare?: boolean }) {
   const [showGate, setShowGate] = useState(false);
   const shown = showGate ? events : events.filter(e => e.type !== "gate_decision");
   return (
-    <Card title="Timeline" hint={
+    <Card title="Timeline" bare={bare} hint={
       <label className="toggle"><input type="checkbox" checked={showGate} onChange={e => setShowGate(e.target.checked)} />
         include EnergyGate decisions</label>}>
       {error && <div className="err">{error}</div>}

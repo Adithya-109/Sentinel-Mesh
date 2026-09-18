@@ -1,28 +1,34 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { BatteryChart, PowerChart, ProjectionChart } from "../charts";
-import CyberMeshBackground from "../components/CyberMeshBackground";
-import TiltCard from "../components/TiltCard";
+import GlassSlabs from "../components/GlassSlabs";
+import SiteFooter from "../components/SiteFooter";
+import SiteHeader from "../components/SiteHeader";
+import type { NavItem } from "../components/SiteHeader";
 import { useEnergy, useEvents, usePoll } from "../data";
 import { ExperimentTable, Scan } from "../experiment";
 import { Controls, GateFeed, Incidents, StatusBar, Timeline } from "../panels";
 import { Card } from "../ui";
+import "../dashboard.css";
 
 const FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";
 
 type Tab = "overview" | "events" | "incidents" | "energy" | "experiment" | "scan";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "events", label: "Events" },
-  { id: "incidents", label: "Incidents" },
-  { id: "energy", label: "Energy" },
-  { id: "experiment", label: "Experiment" },
-  { id: "scan", label: "Scan" },
+const TABS: { id: Tab; label: string; title: string; sub: string }[] = [
+  { id: "overview", label: "Overview", title: "Overview", sub: "The link, the battery and every EnergyGate decision, live." },
+  { id: "events", label: "Events", title: "Events", sub: "Everything the four detection layers have reported, newest first." },
+  { id: "incidents", label: "Incidents", title: "Incidents", sub: "Correlation is rules, not ML. The ML is in the detectors." },
+  { id: "energy", label: "Energy", title: "Energy", sub: "Live 1 s samples from the INA219 monitor. Markers show when the controls changed." },
+  { id: "experiment", label: "Experiment", title: "Experiment", sub: "One run per condition, same attack profile (brief v4 section 6)." },
+  { id: "scan", label: "Scan", title: "Scan", sub: "The console calls the ML service and stores the verdict. Benign files only, never live malware." },
 ];
 
+const asTab = (v: string | null): Tab => (TABS.some(t => t.id === v) ? (v as Tab) : "overview");
+
 export default function Dashboard() {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(asTab(params.get("tab")));
   const status = usePoll(api.status, 1000);
   const incidents = usePoll(api.incidents, 3000);
   const [profile, setProfile] = useState("loud");
@@ -34,68 +40,59 @@ export default function Dashboard() {
   const simulated = !!status.data?.simulated || !!series.simulated;
   const down = status.error !== null;
   const incidentBadge = incidents.data?.filter(i => i.severity === "critical" || i.severity === "high").length ?? 0;
-  const gateCount = events.filter(e => e.type === "gate_decision").length;
+  // Live status and the demo controls only matter on the tabs where you watch
+  // or change the run; on Events, Incidents, Experiment and Scan they were noise.
+  const live = tab === "overview" || tab === "energy";
+  const page = TABS.find(t => t.id === tab)!;
+
+  const nav: NavItem[] = TABS.map(t => ({
+    id: t.id, label: t.label, active: tab === t.id,
+    badge: t.id === "incidents" ? incidentBadge : undefined,
+    onClick: () => { setTab(t.id); window.scrollTo({ top: 0, behavior: "smooth" }); },
+  }));
+
+  const conn = FIXTURES ? { cls: " idle", text: "Fixtures, no API" } : down ? { cls: " bad", text: "API unreachable" } : { cls: "", text: "API connected" };
 
   return (
-    <div className="dashboard-shell">
-      <aside className="sidebar">
-        <CyberMeshBackground dim />
-        <Link to="/" className="brand">
-          <span className="brand-mark" aria-hidden>
-            <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-              <polygon points="11,1 21,6 21,16 11,21 1,16 1,6" stroke="#fff" strokeWidth="2" fill="none" />
-              <circle cx="11" cy="11" r="3" fill="#fff" />
-            </svg>
-          </span>
-          <span>Sentinel<b>Mesh</b></span>
-        </Link>
-        <div className="brand-sub">Security Console</div>
-        <nav className="tabs">
-          {TABS.map(t => (
-            <button key={t.id} className={`tab${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)}>
-              {t.label}
-              {t.id === "incidents" && incidentBadge > 0 && <span className="tab-badge">{incidentBadge}</span>}
-              {t.id === "events" && gateCount > 0 && <span className="tab-dot" />}
-            </button>
-          ))}
-        </nav>
-        <a href="/" className="back-link">&larr; Website</a>
-      </aside>
+    <div className="site console">
+      <GlassSlabs variant="quiet" />
+      <SiteHeader nav={nav} action={<>
+        <span className={`conn${conn.cls}`}>{conn.text}</span>
+        <Link to="/" className="link">Website</Link>
+      </>} />
 
-      <main className="main">
-        <header className="topbar">
-          <span className={`conn${down ? " bad" : ""}`}>
-            {FIXTURES ? "○ fixtures — no API in use"
-              : down ? `✖ console API unreachable (${status.error})` : "✔ console API connected"}
-          </span>
-        </header>
+      <main className="main wrapper dash-main">
+        <div className="page-head" key={tab}>
+          <h1 className="title">{page.title}</h1>
+          <p className="page-sub">{page.sub}</p>
+        </div>
 
-        {FIXTURES && <div className="banner fixtures">FIXTURE MODE &mdash; showing console/frontend-kit/fixtures, not live data. Controls do nothing.</div>}
+        {FIXTURES && <div className="banner">FIXTURE MODE &mdash; showing console/frontend-kit/fixtures, not live data. Controls do nothing.</div>}
+        {down && !FIXTURES && <div className="banner bad">Console API unreachable &mdash; {status.error}</div>}
         {simulated && !FIXTURES && (
-          <div className="banner">SIMULATED ENERGY DATA from tools/mock_rig.py &mdash; illustrates the idea, measures nothing. Do not quote these numbers.</div>
+          <div className="banner warn">SIMULATED ENERGY DATA from tools/mock_rig.py &mdash; illustrates the idea, measures nothing. Do not quote these numbers.</div>
         )}
 
-        <StatusBar s={status.data} />
-        <Controls s={status.data} onChange={refreshAll} />
+        {live && <><StatusBar s={status.data} /><Controls s={status.data} onChange={refreshAll} /></>}
 
         {tab === "overview" && (
           <div className="grid-main">
             <div className="col">
-              <TiltCard maxTilt={2} glare={false}><Incidents incidents={incidents.data} error={incidents.error} /></TiltCard>
-              <TiltCard maxTilt={2} glare={false}><Card title="Battery projection"><ProjectionChart exp={experiment.data} /></Card></TiltCard>
+              <Incidents incidents={incidents.data} error={incidents.error} />
+              <Card title="Battery projection"><ProjectionChart exp={experiment.data} /></Card>
             </div>
             <div className="col">
-              <TiltCard maxTilt={2} glare={false}><GateFeed events={events} /></TiltCard>
+              <GateFeed events={events} />
             </div>
           </div>
         )}
 
-        {tab === "events" && <Timeline events={events} error={evError} />}
+        {tab === "events" && <Timeline events={events} error={evError} bare />}
 
-        {tab === "incidents" && <Incidents incidents={incidents.data} error={incidents.error} />}
+        {tab === "incidents" && <Incidents incidents={incidents.data} error={incidents.error} bare />}
 
         {tab === "energy" && (
-          <Card title="Energy" hint="live, 1 s samples from the INA219 monitor · markers show when the controls changed">
+          <Card title="Energy" bare>
             <div className="row2">
               <PowerChart series={series} baseline={status.data?.baseline_mw ?? null} />
               <BatteryChart series={series} />
@@ -105,11 +102,13 @@ export default function Dashboard() {
 
         {tab === "experiment" && (
           <ExperimentTable exp={experiment.data} error={experiment.error} profile={profile}
-            setProfile={p => { setProfile(p); setTimeout(experiment.refresh, 0); }} onChange={refreshAll} />
+            setProfile={p => { setProfile(p); setTimeout(experiment.refresh, 0); }} onChange={refreshAll} bare />
         )}
 
-        {tab === "scan" && <Scan onStored={refreshAll} />}
+        {tab === "scan" && <Scan onStored={refreshAll} bare />}
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

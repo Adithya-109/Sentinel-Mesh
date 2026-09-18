@@ -41,12 +41,27 @@ export function Chip({ spec, big, children }: { spec: ChipSpec; big?: boolean; c
 
 export const SeverityChip = ({ s }: { s: Severity }) => <Chip spec={SEVERITY[s] ?? SEVERITY.info} />;
 
-export function Card({ title, hint, children, className }: {
-  title: ReactNode; hint?: ReactNode; children: ReactNode; className?: string;
+export function Card({ title, hint, children, className, bare }: {
+  title: ReactNode; hint?: ReactNode; children: ReactNode; className?: string; bare?: boolean;
 }) {
+  // A plain-text hint is a subtitle under the title; anything interactive (a
+  // toggle) sits on the right of the header instead of crowding the title line.
+  // `bare` drops the title and subtitle when the page already shows them.
+  const subtitle = typeof hint === "string";
+  const tools = !!hint && !subtitle;
   return (
     <section className={`card ${className ?? ""}`}>
-      <h2>{title}{hint && <span className="hint">{hint}</span>}</h2>
+      {(!bare || tools) && (
+        <div className="card-head">
+          {!bare && (
+            <div>
+              <h2>{title}</h2>
+              {subtitle && <p className="hint">{hint}</p>}
+            </div>
+          )}
+          {tools && <div className="card-tools">{hint}</div>}
+        </div>
+      )}
       {children}
     </section>
   );
@@ -69,29 +84,49 @@ const TECHNIQUE: Record<string, string> = {
   "T1692.002": "Unauthorized Message: Reporting Message (ICS)",
 };
 export const techniqueName = (t: string) => (TECHNIQUE[t] ? `${t} ${TECHNIQUE[t]}` : t);
+/** Name only, for tight spots; the id stays available as a tooltip. */
+export const techniqueLabel = (t: string) => TECHNIQUE[t] ?? t;
 
-/** One event with its reasons always visible (kit rule 2). */
-export function EventRow({ e }: { e: SmEvent }) {
-  const action = e.type === "gate_decision" ? String(e.details?.action ?? "") : "";
+/** One event with its reasons always visible (kit rule 2). `compact` stacks the
+ * row for a narrow feed and drops the fields that never vary there (layer, type, node). */
+export function EventRow({ e, compact }: { e: SmEvent; compact?: boolean }) {
+  const isGate = e.type === "gate_decision";
+  const action = isGate ? String(e.details?.action ?? "") : "";
+  const chip = action && ACTION[action] ? <Chip spec={ACTION[action]} /> : <SeverityChip s={e.severity} />;
+  const prob = e.score !== null && e.score !== undefined && (
+    <>{isGate ? "P(real)" : "score"} <span className="prob">{e.score.toFixed(2)}</span></>
+  );
+  const body = (
+    <div className="body">
+      <div className="sum">{compact ? e.summary : <>{LAYER_TAG[e.layer] ?? e.layer} &middot; {e.summary}</>}</div>
+      <div className="meta">
+        {compact ? prob : (
+          <>
+            {e.type}
+            {e.node && <> &middot; {e.node}</>}
+            {prob && <> &middot; {prob}</>}
+            {e.technique && <> &middot; <span className="tag">{techniqueName(e.technique)}</span></>}
+          </>
+        )}
+      </div>
+      {e.reasons?.length > 0 && (
+        <ul className="reasons">{e.reasons.slice(0, 3).map((r, i) => <li key={i}>{r}</li>)}</ul>
+      )}
+    </div>
+  );
+  if (compact) {
+    return (
+      <div className="ev compact">
+        <div className="lead">{chip}<span className="t">{fmtTime(e.ts)}</span></div>
+        {body}
+      </div>
+    );
+  }
   return (
     <div className="ev">
       <div className="t">{fmtTime(e.ts)}</div>
-      <div>{action && ACTION[action] ? <Chip spec={ACTION[action]} /> : <SeverityChip s={e.severity} />}</div>
-      <div className="body">
-        <div className="sum">{LAYER_TAG[e.layer] ?? e.layer} &middot; {e.summary}</div>
-        <div className="meta">
-          {e.type}
-          {e.node && <> &middot; {e.node}</>}
-          {e.score !== null && e.score !== undefined && (
-            <> &middot; {e.type === "gate_decision" ? "P(real)" : "score"}{" "}
-              <span className="prob">{e.score.toFixed(2)}</span></>
-          )}
-          {e.technique && <> &middot; <span className="tag">{techniqueName(e.technique)}</span></>}
-        </div>
-        {e.reasons?.length > 0 && (
-          <ul className="reasons">{e.reasons.slice(0, 3).map((r, i) => <li key={i}>{r}</li>)}</ul>
-        )}
-      </div>
+      <div>{chip}</div>
+      {body}
     </div>
   );
 }

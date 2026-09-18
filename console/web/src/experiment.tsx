@@ -5,9 +5,9 @@ import { Card, EventRow } from "./ui";
 
 const STATUS_WORD = { pending: "○ pending", running: "▶ running", done: "✔ done" } as const;
 
-export function ExperimentTable({ exp, error, profile, setProfile, onChange }: {
+export function ExperimentTable({ exp, error, profile, setProfile, onChange, bare }: {
   exp: Experiment | null; error: string | null; profile: string;
-  setProfile: (p: string) => void; onChange: () => void;
+  setProfile: (p: string) => void; onChange: () => void; bare?: boolean;
 }) {
   const [duration, setDuration] = useState(120);
   const [err, setErr] = useState<string | null>(null);
@@ -19,9 +19,9 @@ export function ExperimentTable({ exp, error, profile, setProfile, onChange }: {
   const n = (v: number | null, d = 0) => (v === null ? <span className="dash">&mdash;</span> : v.toFixed(d));
 
   return (
-    <Card title="Energy experiment" hint="brief v4 §6 — one run per condition, same attack profile">
-      <div className="controls" style={{ marginBottom: 10 }}>
-        <div>
+    <Card title="Energy experiment" hint="brief v4 §6 — one run per condition, same attack profile" bare={bare}>
+      <div className="controls" style={{ marginBottom: 26 }}>
+        <div className="ctl">
           <span className="ctl-label">Attack profile</span>
           <span className="seg">
             {(exp?.profiles ?? ["loud", "slow_drip"]).map(p => (
@@ -29,9 +29,9 @@ export function ExperimentTable({ exp, error, profile, setProfile, onChange }: {
             ))}
           </span>
         </div>
-        <label className="small">run length&nbsp;
-          <input type="number" min={5} max={3600} value={duration} onChange={e => setDuration(Number(e.target.value))}
-            style={{ width: 80, background: "var(--page)", border: "1px solid var(--axis)", borderRadius: 6, padding: "4px 6px" }} /> s
+        <label className="ctl small">
+          <span className="ctl-label">Run length (seconds)</span>
+          <input type="number" className="num-input" min={5} max={3600} value={duration} onChange={e => setDuration(Number(e.target.value))} />
         </label>
         {running && <span><b>running:</b> {running.condition} ({running.profile}) &mdash; {secsLeft}s left&nbsp;
           <button className="btn" onClick={() => act(api.stopExperiment)}>Stop now</button></span>}
@@ -69,7 +69,7 @@ export function ExperimentTable({ exp, error, profile, setProfile, onChange }: {
   );
 }
 
-export function Scan({ onStored }: { onStored: () => void }) {
+export function Scan({ onStored, bare }: { onStored: () => void; bare?: boolean }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -83,7 +83,7 @@ export function Scan({ onStored }: { onStored: () => void }) {
   };
 
   return (
-    <Card title="Scan" hint="the console calls the ML service and stores the verdict · benign files only, never live malware">
+    <Card title="Scan" hint="the console calls the ML service and stores the verdict · benign files only, never live malware" bare={bare}>
       <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Paste an email (subject and body)" />
       <div className="scan-row">
         <button className="btn primary" disabled={busy || !text.trim()} onClick={() => run(() => api.scanEmail(text))}>Scan email</button>
