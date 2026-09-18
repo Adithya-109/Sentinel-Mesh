@@ -1,0 +1,223 @@
+{
+  "fileguard_shortcut_ablation": {
+    "full (shipped recipe)": {
+      "n_features": 54,
+      "auc": 0.99984,
+      "detection_at_0p1pct_fpr": 0.9894,
+      "detection_at_1pct_fpr": 0.9977,
+      "heldout_pkg_false_alarm_mean": 0.0019,
+      "heldout_pkg_false_alarm_per_split": [
+        0.002,
+        0.0024,
+        0.0012
+      ],
+      "insample_thirdparty_false_alarm": 0.0
+    },
+    "- ImageBase": {
+      "n_features": 53,
+      "auc": 0.99985,
+      "detection_at_0p1pct_fpr": 0.9915,
+      "detection_at_1pct_fpr": 0.9976,
+      "heldout_pkg_false_alarm_mean": 0.0014,
+      "heldout_pkg_false_alarm_per_split": [
+        0.0,
+        0.0028,
+        0.0014
+      ],
+      "insample_thirdparty_false_alarm": 0.0
+    },
+    "- ImageBase, Subsystem": {
+      "n_features": 52,
+      "auc": 0.99984,
+      "detection_at_0p1pct_fpr": 0.9884,
+      "detection_at_1pct_fpr": 0.9971,
+      "heldout_pkg_false_alarm_mean": 0.0009,
+      "heldout_pkg_false_alarm_per_split": [
+        0.0016,
+        0.0,
+        0.001
+      ],
+      "insample_thirdparty_false_alarm": 0.0
+    },
+    "- top-5 gain cols": {
+      "n_features": 49,
+      "auc": 0.9998,
+      "detection_at_0p1pct_fpr": 0.9842,
+      "detection_at_1pct_fpr": 0.9965,
+      "heldout_pkg_false_alarm_mean": 0.0,
+      "heldout_pkg_false_alarm_per_split": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "insample_thirdparty_false_alarm": 0.0
+    }
+  },
+  "fileguard_cluster_split": {
+    "exact-duplicate groups (shipped) | all 54 features": {
+      "seeds": [
+        42,
+        1,
+        2,
+        3,
+        4
+      ],
+      "detection_at_0p1pct_fpr_mean": 0.9854,
+      "detection_at_0p1pct_fpr_std": 0.0031,
+      "detection_at_0p1pct_fpr_per_seed": [
+        0.9894,
+        0.9872,
+        0.9865,
+        0.9806,
+        0.9833
+      ],
+      "detection_at_1pct_fpr_mean": 0.9969,
+      "auc_mean": 0.99979
+    },
+    "exact-duplicate groups (shipped) | - top-5 gain cols": {
+      "seeds": [
+        42,
+        1,
+        2,
+        3,
+        4
+      ],
+      "detection_at_0p1pct_fpr_mean": 0.9808,
+      "detection_at_0p1pct_fpr_std": 0.0024,
+      "detection_at_0p1pct_fpr_per_seed": [
+        0.9842,
+        0.9814,
+        0.9821,
+        0.9782,
+        0.978
+      ],
+      "detection_at_1pct_fpr_mean": 0.9959,
+      "auc_mean": 0.99973
+    },
+    "held-out clusters (k=300) | all 54 features": {
+      "seeds": [
+        42,
+        1,
+        2,
+        3,
+        4
+      ],
+      "detection_at_0p1pct_fpr_mean": 0.881,
+      "detection_at_0p1pct_fpr_std": 0.0716,
+      "detection_at_0p1pct_fpr_per_seed": [
+        0.9074,
+        0.8907,
+        0.9587,
+        0.7457,
+        0.9027
+      ],
+      "detection_at_1pct_fpr_mean": 0.9905,
+      "auc_mean": 0.99921
+    },
+    "held-out clusters (k=300) | - top-5 gain cols": {
+      "seeds": [
+        42,
+        1,
+        2,
+        3,
+        4
+      ],
+      "detection_at_0p1pct_fpr_mean": 0.8789,
+      "detection_at_0p1pct_fpr_std": 0.0726,
+      "detection_at_0p1pct_fpr_per_seed": [
+        0.9669,
+        0.8174,
+        0.79,
+        0.8603,
+        0.9599
+      ],
+      "detection_at_1pct_fpr_mean": 0.99,
+      "auc_mean": 0.99912
+    }
+  },
+  "mailguard_loco_tuned_threshold": {
+    "CEAS_08": {
+      "tuned_threshold": 0.3781,
+      "recall_at_0p5": 0.9074,
+      "recall_at_tuned": 0.9336,
+      "false_alarm_at_0p5": 0.0671,
+      "false_alarm_at_tuned": 0.092,
+      "auc": 0.951,
+      "oracle_recall_at_2pct_fa": 0.6874
+    },
+    "Enron": {
+      "tuned_threshold": 0.2327,
+      "recall_at_0p5": 0.8375,
+      "recall_at_tuned": 0.9417,
+      "false_alarm_at_0p5": 0.0859,
+      "false_alarm_at_tuned": 0.2585,
+      "auc": 0.948,
+      "oracle_recall_at_2pct_fa": 0.6709
+    },
+    "Ling": {
+      "tuned_threshold": 0.324,
+      "recall_at_0p5": 0.8803,
+      "recall_at_tuned": 0.9357,
+      "false_alarm_at_0p5": 0.041,
+      "false_alarm_at_tuned": 0.0753,
+      "auc": 0.9785,
+      "oracle_recall_at_2pct_fa": 0.7871
+    },
+    "Nigerian_Fraud": {
+      "tuned_threshold": 0.3228,
+      "recall_at_0p5": 0.992,
+      "recall_at_tuned": 0.9952
+    },
+    "SpamAssasin": {
+      "tuned_threshold": 0.3356,
+      "recall_at_0p5": 0.938,
+      "recall_at_tuned": 0.9623,
+      "false_alarm_at_0p5": 0.0659,
+      "false_alarm_at_tuned": 0.123,
+      "auc": 0.9849,
+      "oracle_recall_at_2pct_fa": 0.8728
+    }
+  },
+  "mailguard_char_ngrams_and_stronger_padding": {
+    "word (shipped recipe)": {
+      "threshold": 0.4492,
+      "legit_false_alarm": 0.019,
+      "recall_clean": 0.9893,
+      "recall_shipped_attack_append_2x600": 0.812,
+      "recall_stronger_sandwich_3_before_3_after": 0.5323,
+      "recall_UNSEEN_append_6x600": 0.5417,
+      "recall_UNSEEN_prepend_6x600": 0.5193,
+      "recall_UNSEEN_interleaved_4_pieces": 0.729
+    },
+    "word + char": {
+      "threshold": 0.3267,
+      "legit_false_alarm": 0.0237,
+      "recall_clean": 0.995,
+      "recall_shipped_attack_append_2x600": 0.913,
+      "recall_stronger_sandwich_3_before_3_after": 0.1363,
+      "recall_UNSEEN_append_6x600": 0.859,
+      "recall_UNSEEN_prepend_6x600": 0.112,
+      "recall_UNSEEN_interleaved_4_pieces": 0.7453
+    },
+    "word, trained on sandwich padding too (CONTROL)": {
+      "threshold": 0.4772,
+      "legit_false_alarm": 0.019,
+      "recall_clean": 0.9827,
+      "recall_shipped_attack_append_2x600": 0.88,
+      "recall_stronger_sandwich_3_before_3_after": 0.907,
+      "recall_UNSEEN_append_6x600": 0.9067,
+      "recall_UNSEEN_prepend_6x600": 0.9043,
+      "recall_UNSEEN_interleaved_4_pieces": 0.7603
+    },
+    "word + char, trained on sandwich padding too": {
+      "threshold": 0.431,
+      "legit_false_alarm": 0.0213,
+      "recall_clean": 0.9873,
+      "recall_shipped_attack_append_2x600": 0.936,
+      "recall_stronger_sandwich_3_before_3_after": 0.9027,
+      "recall_UNSEEN_append_6x600": 0.9927,
+      "recall_UNSEEN_prepend_6x600": 0.9107,
+      "recall_UNSEEN_interleaved_4_pieces": 0.756
+    }
+  }
+}

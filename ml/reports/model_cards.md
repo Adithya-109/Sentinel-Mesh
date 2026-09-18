@@ -46,10 +46,33 @@ mail the model's vocabulary has never seen.
   corpora collapse spam, scams, and phishing into one `label=1`. A model
   tuned on this may not weight credential-phishing cues the same way a
   phishing-specific dataset would.
-- **Red-team gap.** Padding a malicious email with ordinary text dropped
-  recall from 99.3% to 16.1%; adversarial training recovered it to 79.4%,
-  at a small false-alarm cost (1.0% -> 1.3%). The remaining ~20-point gap
-  is real evasion headroom, not fully closed.
+- **The 2% false-alarm target does not transfer to a new email source.**
+  With the threshold tuned the production way (<=2% false alarms on
+  in-distribution validation data) and applied to a held-out corpus, false
+  alarms are 9.2% (CEAS_08), 25.9% (Enron), 7.5% (Ling), 12.3%
+  (SpamAssasin). Even with the threshold tuned on the new corpus itself,
+  recall at 2% false alarms is only 67-87%
+  (`reports/experiments.json`, `mailguard_loco_tuned_threshold`). The 1.8%
+  in the table above holds for mail like the training mail only.
+- **Red-team gap (padding).** Padding a malicious email with ordinary text
+  dropped recall from 99.3% to 15.8% (append-only, at 0.5). Adversarial
+  training now covers three layouts (append, sandwich before+after,
+  interleaved) and recovers it to 88.6% on the append attack, 91.6% on
+  sandwich, 79.7% on interleaved. On layouts it was **not** trained on:
+  91.3% (6 chunks appended), 90.0% (6 prepended), **72.3% (interleaved into
+  8 pieces)**. The un-hardened baseline scores 0.1-14% on all of these.
+  Interleaving is the open gap. Caveats: the padding text is drawn from the
+  same legit pool used in training, so this does not test unfamiliar padding
+  content; and the price is a small drop in clean recall at the tuned
+  threshold (98.7% -> 98.1% at the same 1.8% false alarms, AUC 0.9987 ->
+  0.9974).
+- **Character n-grams did not help and were not adopted.** A word+char
+  model looked more robust (91% on the shipped append attack) only because
+  its char branch read just the first 1,000 characters, so trailing padding
+  never reached it; prepended padding collapsed it to 11%. The gain came
+  from training on more padding layouts, not from the extra features (a
+  word-only control trained the same way matched it). See
+  `mailguard_char_ngrams_and_stronger_padding` in `reports/experiments.json`.
 - **Per-corpus class imbalance varies a lot** (Nigerian_Fraud is 100%
   malicious; CEAS_08 is ~56%; SpamAssasin ~30%), which is part of why
   leave-one-corpus-out numbers swing as much as they do.
@@ -109,13 +132,26 @@ upweighted (sample weight 20), cuts that to **0.44%**
   `ml/README.md`'s benign-set section. The false-alarm rate on truly
   novel legitimate software in the wild may differ from what the
   held-out-package test estimates.
-- **`ImageBase` dominates.** It alone accounts for the large majority of
-  the model's gain (`malware_top_gain_share`, `ImageBase_single_feature_auc`
-  ~0.94) -- a single-feature shortcut this strong is a sign the dataset's
-  malicious/benign split correlates with something incidental (e.g. how
-  the two classes were compiled/linked), not necessarily with malicious
-  *behavior*. Worth stress-testing before trusting it against
+- **`ImageBase` dominates the gain, but the model does not depend on it.**
+  It accounts for 74% of LightGBM's gain and alone gives ~0.94 AUC, a sign
+  the dataset's classes differ in incidental ways (how they were
+  compiled/linked). We retrained without it, and without the top-5 gain
+  columns: detection at 0.1% false alarms is essentially unchanged
+  (98.5% -> 98.1%, 5 seeds). Other columns carry the same signal, so this
+  is not a single fixable shortcut. Still worth stress-testing against
   adversarially-built binaries.
+- **Unseen malware families are much harder than the headline number.**
+  The shipped split groups only *identical* feature vectors, so
+  near-duplicates (same family, rebuilt) can sit on both sides. Holding out
+  whole clusters of similar files (k-means, k=300, 5 seeds) drops
+  detection at 0.1% false alarms from 98.5% +/- 0.3% to **88.1% +/- 7.2%**
+  (range 74.6-95.9%), while AUC stays ~0.999. Quote the 88% for
+  "malware unlike anything in training". Clusters are a proxy for families,
+  not real family labels (`fileguard_cluster_split`).
+- **The in-sample third-party number.** `thirdparty_false_alarm: 0.0` in
+  `malware_group_split_final` is measured on binaries the final model
+  trained on. The honest figure is the held-out-package one: ~0.2% at the
+  tuned threshold (3 package splits, `fileguard_shortcut_ablation`).
 
 **Explanations.** Top-3 features by LightGBM `pred_contrib`, converted to
 plain English by `sentinel_ml/reasons.py` (all 54 feature names are
