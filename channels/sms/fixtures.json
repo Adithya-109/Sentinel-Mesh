@@ -1,5 +1,5 @@
 {
-  "note": "Hand-written demo script for the live SMS Guard test box. Rehearsed, not improvised -- paste these verbatim during the pitch. None of these messages are in the UCI training data.",
+  "note": "Hand-written demo script for the live SMS Guard test box. Rehearsed, not improvised -- paste these verbatim during the pitch. None of these messages are in the UCI training data. KNOWN RESULT: 3 of the 4 come out as expected. `legit_reminder` is a known FALSE ALARM (it is flagged as smishing; score 0.895 against threshold 0.2204 when this note was written), because the model treats digits as a spam cue -- see the SMS Guard section of ml/reports/model_cards.md and channels/sms/eval_report.json. Show it as an honest limit; do not present the four as 4/4.",
   "messages": [
     {
       "id": "smishing_delivery",
@@ -14,7 +14,8 @@
     {
       "id": "legit_reminder",
       "expected_label": "legitimate",
-      "text": "Hi, this is a reminder that your dentist appointment with Dr. Patel is tomorrow at 2:30pm. Reply C to confirm or call the office to reschedule."
+      "text": "Hi, this is a reminder that your dentist appointment with Dr. Patel is tomorrow at 2:30pm. Reply C to confirm or call the office to reschedule.",
+      "known_result": "false alarm: flagged as smishing (score 0.895 vs threshold 0.2204 at time of writing)"
     },
     {
       "id": "legit_friend",

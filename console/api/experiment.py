@@ -170,8 +170,7 @@ def table(conn: sqlite3.Connection, profile: Optional[str] = None) -> dict[str, 
 
     notes = []
     if any(r["source"] == "simulated" for r in rows):
-        notes.append("SIMULATED: some rows were recorded from tools/mock_rig.py, not the INA219 rig. "
-                     "Do not quote them.")
+        notes.append("SIMULATED: some rows were recorded from tools/mock_rig.py, not the INA219 rig.")
     if any(r["status"] == "done" and r["legit_connect_pct"] is None for r in rows):
         notes.append("Legit-client columns stay empty until the firmware's numbers are posted to "
                      "POST /experiment/result -- the console cannot observe them.")

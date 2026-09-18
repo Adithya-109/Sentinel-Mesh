@@ -9,7 +9,7 @@ Trace row matching contracts/CONTRACT.md:
 
 A small decision tree (max_depth ~6) is exported straight to C so it can
 run on the ESP32 with no runtime dependency: `int classify_window(const
-float* f)`, where `f` holds FEATURE_ORDER's 11 features in order.
+float* f)`, where `f` holds FEATURE_ORDER's 10 features in order.
 """
 import glob
 import json
@@ -19,8 +19,14 @@ import numpy as np
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
 
+# Must match, index for index, the order the gateway builds its feature vector
+# in (firmware/lib/sentinel_proto/include/sentinel_proto/field_model.h,
+# FIELD_MODEL_NUM_FEATURES = 10). window_ms is deliberately NOT a feature: it is
+# the fixed 5000 ms detection window, so it carries no signal, and including it
+# would shift every index by one against the firmware and read past its
+# 10-float array. tests/test_feature_order_matches_firmware.py enforces this.
 FEATURE_ORDER = [
-    "window_ms", "hs_per_s", "hs_fail", "replay_rej", "auth_fail",
+    "hs_per_s", "hs_fail", "replay_rej", "auth_fail",
     "stale", "frag_timeout", "rssi_mean", "rssi_var", "loss_pct", "jitter_ms",
 ]
 CLASSES = ["normal", "weak_link", "replay", "flood", "impersonation"]
