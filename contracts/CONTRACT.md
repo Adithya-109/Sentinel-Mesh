@@ -20,8 +20,9 @@
 | field  | attack_detected (details.kind: replay_campaign, handshake_flood, impersonation) | by kind | high |
 | field  | link_degraded                                    | null       | low      |
 | field  | rekey (details.level: 512/768/1024, details.reason) | null    | info     |
-| field  | gate_decision (details: action=spend\|challenge\|drop, prob_real, budget_j, cost_est_mj) | null | info(spend)/low(challenge)/medium(drop) |
-| field  | energy_sample (details: mj_hour, battery_pct, source=field-1\|monitor) | null | info |
+| field  | gate_decision (details: action=spend\|challenge\|drop, sender; `score`=prob. sender is real) | null | info(spend)/low(challenge)/medium(drop) |
+| field  | energy_alert (details: draw_mw, baseline_mw)     | null       | low..critical, scales with draw multiple |
+| field  | budget_exhausted                                 | null       | high |
 | tamper | case_opened / moved / voltage_anomaly            | null       | critical |
 
 ## HTTP
@@ -29,6 +30,15 @@
 - POST :8001/score/email {"text": "..."} -> Event
 - POST :8001/score/file (multipart file) or {"features": {<54 PE features>}} -> Event
 - GET  :8001/health
+
+**Open, not yet frozen (v4):** a `sentinelmesh_frontend_kit.zip` (React/Vite,
+copied into `console/frontend-kit/`) already assumes `GET /status`,
+`GET /energy` (continuous power samples — NOT events, see above),
+`GET /experiment`, `POST /mode {mode}`, `POST /attack {profile}` and
+`POST /experiment/run`. `mode`/`attack` reach the boards over serial per the
+kit's own comments, so their exact request/response shapes and the new
+serial line(s) they trigger are Claude 2's (+ Claude 3 for the serial side)
+first v4 task, not decided here — see `docs/v4_energy_split.md`.
 
 ## Serial lines
 - gateway -> console: `EVT <Event JSON>` | `TRC <Trace JSON>` | `LOG <text>` (ignored)

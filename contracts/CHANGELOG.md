@@ -5,7 +5,45 @@ streams.** Entries are newest first.
 
 ---
 
-## 2026-09-18 — v2 energy delta (additive, frozen ahead of the three streams starting v4 work)
+## 2026-09-18 — v2 energy delta, corrected against `sentinelmesh_frontend_kit.zip`
+
+The entry directly below this one (same day) invented `energy_sample` and a
+`details.prob_real`/`budget_j`/`cost_est_mj` shape for `gate_decision` before
+checking whether anything already assumed a shape. A frontend kit
+(`console/frontend-kit/`, copied in alongside this entry) turned up with
+`src/types.ts` stating it "mirrors contracts/CONTRACT.md (v1.1)" and fixture
+`events.json` showing real examples — so that shape wins over the guess:
+
+- **`energy_sample` does not exist.** Continuous power/battery samples are
+  **not events** — they are served by `GET /energy` (console-local, returns
+  `{samples: [{ts, power_mw, battery_pct, volts, amps}], markers: [{ts,
+  label}]}`, polled ~1s). Only two new *discrete* event types exist:
+  `energy_alert` (details: `draw_mw`, `baseline_mw` — both required) and
+  `budget_exhausted` (no required details).
+- **`gate_decision`'s `details` is just `{action, sender}`.** `action` is
+  `spend|challenge|drop` (required); `sender` is a free-text id (optional,
+  seen in the fixture but not load-bearing). The probability the sender is
+  real goes in the Event's existing top-level `score` field, per the fixture
+  (`evt-0005`: `score: 0.21` alongside `details.action: "challenge"`) — it is
+  **not** duplicated into `details.prob_real`. There is no `budget_j` or
+  `cost_est_mj` in the event at all; live budget state is `Status.budget_j`/
+  `budget_max_j` on `GET /status`, a separate resource.
+- `event.schema.json` / `trace.schema.json` / `CONTRACT.md` corrected to
+  match. The Trace-row additions from the entry below (`battery_pct`,
+  `frag_complete_pct`, `dup_pct`) are unaffected — the kit doesn't touch
+  Trace, that hand-off is internal to console/ml/firmware, not the frontend.
+- Re-verified: 46/46 console tests still pass; the corrected shapes validate
+  against the fixture's actual `gate_decision`/`energy_alert` examples.
+
+**Still open**, now more precisely: `GET /status`, `GET /energy`,
+`GET /experiment`, `POST /mode`, `POST /attack`, `POST /experiment/run` —
+the kit assumes all six but none is specified here yet. First v4 task for
+Claude 2 (`docs/v4_energy_split.md`), coordinating the `mode`/`attack`
+serial mapping with Claude 3.
+
+---
+
+## 2026-09-18 — v2 energy delta (additive, frozen ahead of the three streams starting v4 work) — SUPERSEDED, see entry above
 
 Brief v4 adds EnergyGate (a gatekeeper in front of the PQC handshake) and a
 measured energy budget. Two new `field`-layer event types and three new

@@ -28,7 +28,7 @@
         "file_malicious", "file_clean",
         "replay_rejected", "handshake_rejected", "attack_detected",
         "link_degraded", "rekey",
-        "gate_decision", "energy_sample",
+        "gate_decision", "energy_alert", "budget_exhausted",
         "case_opened", "moved", "voltage_anomaly"
       ]
     },
@@ -78,7 +78,7 @@
       "then": {
         "properties": {
           "type": {
-            "enum": ["replay_rejected", "handshake_rejected", "attack_detected", "link_degraded", "rekey", "gate_decision", "energy_sample"]
+            "enum": ["replay_rejected", "handshake_rejected", "attack_detected", "link_degraded", "rekey", "gate_decision", "energy_alert", "budget_exhausted"]
           }
         }
       }
@@ -121,18 +121,16 @@
       }
     },
     {
-      "$comment": "v4 energy delta: EnergyGate's spend/challenge/drop verdict, one per admission decision",
+      "$comment": "v4 energy delta: EnergyGate's spend/challenge/drop verdict, one per admission decision. `score` carries the model's probability the sender is real -- not duplicated into details.",
       "if": {"properties": {"type": {"const": "gate_decision"}}, "required": ["type"]},
       "then": {
         "properties": {
           "details": {
             "type": "object",
-            "required": ["action", "prob_real", "budget_j"],
+            "required": ["action"],
             "properties": {
               "action": {"enum": ["spend", "challenge", "drop"]},
-              "prob_real": {"type": "number", "minimum": 0, "maximum": 1},
-              "budget_j": {"type": "number", "minimum": 0, "description": "token-bucket balance after this decision"},
-              "cost_est_mj": {"type": "number", "minimum": 0, "description": "estimated millijoule cost of the handshake this decision gates"}
+              "sender": {"type": "string"}
             }
           }
         },
@@ -140,17 +138,16 @@
       }
     },
     {
-      "$comment": "v4 energy delta: periodic energy/battery telemetry, independent of any single decision",
-      "if": {"properties": {"type": {"const": "energy_sample"}}, "required": ["type"]},
+      "$comment": "v4 energy delta: discrete alert when draw spikes well above baseline. Continuous samples are NOT events -- they go through GET /energy (console-local, see CONTRACT.md), not the event stream.",
+      "if": {"properties": {"type": {"const": "energy_alert"}}, "required": ["type"]},
       "then": {
         "properties": {
           "details": {
             "type": "object",
-            "required": ["mj_hour", "source"],
+            "required": ["draw_mw", "baseline_mw"],
             "properties": {
-              "mj_hour": {"type": "number", "minimum": 0},
-              "battery_pct": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
-              "source": {"enum": ["field-1", "monitor"]}
+              "draw_mw": {"type": "number", "minimum": 0},
+              "baseline_mw": {"type": "number", "minimum": 0}
             }
           }
         },
