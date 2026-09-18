@@ -162,7 +162,7 @@ export function ProjectionChart({ exp }: { exp: Experiment | null }) {
   return (
     <div>
       <div className="chart-sub">
-        {simulated && <><span className="sim">SIMULATED &mdash; do not quote</span><br /></>}
+        {simulated && <><span className="sim">SIMULATED</span><br /></>}
         Projected from each experiment run's measured mean draw, on an assumed full cell &mdash; an estimate, not a measurement of a full discharge.
       </div>
       <ResponsiveContainer width="100%" height={260}>
