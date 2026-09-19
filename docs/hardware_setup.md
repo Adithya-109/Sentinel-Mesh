@@ -1,108 +1,204 @@
 # Hardware setup — energy rig (v4)
 
-Written 2026-09-18 for whoever has the boards in hand. Grounded in what's
-already in the repo (`firmware/platformio.ini`, `firmware/src/common/
-board_config.h`) rather than invented from scratch, so it doesn't
-contradict what the firmware stream already assumed. Companion to
-`docs/v4_energy_split.md` (the work split) — this file is just the
-physical setup, step by step, verifying each stage before wiring the next.
+**Updated 2026-09-19, night before/of demo, from what's actually wired and
+running on real hardware right now** — supersedes the original plan below in
+every place they disagree. Kept the original plan's reasoning where it's
+still true; corrected everything that changed once we actually had parts in
+hand (no battery, ADS1115 instead of INA219, no USB hub, only 2 data-capable
+cables). If you're picking up Monitor work, read this whole file before
+touching firmware — several things here look like they should be "obviously"
+different and aren't; the reasons are load-bearing.
 
-## Why four boards, not three
+## The four boards and what's actually true about each
 
-The existing `platformio.ini` only defines three environments —
-`field_node`, `gateway`, `attacker`. v4 adds a fourth board, **Monitor**,
+| Board | Role | Powered by (actual, tonight) | Laptop connection |
+|---|---|---|---|
+| **Field node** | Runs the mesh/crypto handshake, the thing being measured | **No battery available.** Powered via a jumper wire from Gateway's own 5V/GND header pins, routed through the shunt (see wiring below) | None — no USB cable at all. It has no serial link to any laptop; it only talks over ESP-NOW to Gateway. |
+| **Gateway** | Central hub: ESP-NOW handshake initiator with field node, detects attacks, reports to console | USB, from the main laptop | **Permanent** — this is the one board that must stay wired the whole demo, since it's the only source of live "ATTACK!" detection events on the dashboard |
+| **Attacker** | Floods/replays/impersonates over ESP-NOW at field node; Gateway is what detects it | USB (any spare charging cable — it only needs power, not data, to actually attack) | **None most of the time.** Only gets a data cable plugged in briefly to push a `MODE` command (see "Demo cable plan" below); the attack itself runs over radio with zero laptop involvement |
+| **Monitor** | Reads real current/voltage off a shunt resistor, reports energy telemetry | USB | **Permanent** — this is what drives the dashboard's live energy graph |
+
+Why field node has no battery: we don't have a LiPo pack for this rig. The
+fix in use tonight is powering it entirely off Gateway's own USB-supplied 5V
+rail via jumper wires — Gateway is going to be plugged in anyway, so this
+costs nothing extra. **Do not also plug field node into its own USB cable
+while this jumper is connected** — two live 5V sources on the same board
+risks backfeed, and more importantly it gives current a path around the
+shunt, silently invalidating every reading Monitor reports.
+
+## Sensor: ADS1115, not INA219
+
+The original plan (below) assumed an INA219. **We don't have one — we have an
+ADS1115** (a general-purpose 16-bit ADC, no built-in current-sense amp), so
+`firmware/src/monitor/main.cpp` was rewritten around it. If you're writing or
+reading Monitor firmware, everything is in terms of the ADS1115's two
+channels:
+
+- **A0−A1 (differential, `GAIN_SIXTEEN`, ±256mV full scale)** — reads the
+  voltage drop across the shunt resistor. Current = that voltage ÷
+  `board::SHUNT_RESISTANCE_OHMS`.
+- **A2 (single-ended, `GAIN_ONE`, ±4.096V full scale)** — meant to read bus/
+  battery voltage through a divider. **Currently tied to GND** (see wiring),
+  since there's no real battery/divider circuit built — a real "volts"
+  reading isn't available yet, and 0V is more honest than the ADC railing at
+  its ±4.096V limit (which is exactly what happened before it was grounded —
+  showed a constant, meaningless 8.188V).
+
+Unlike the INA219, the ADS1115 has no built-in shunt amplifier and its inputs
+can't exceed its own 3.3V supply — so **the shunt sits low-side**, in the
+return/GND leg, not the traditional high-side placement:
+
+```
+gateway 5V  ──────────────────────────────────────────> field node 5V/VIN
+gateway GND ──[shunt, ~2.5Ω = four 10Ω resistors in parallel]──> field node GND
+                    |                              |
+                   A0 (Monitor)                   A1 (Monitor)
+Monitor GND ────────┘ (shares the same ground rail as gateway GND / shunt A0 side —
+                        required, or the differential reading is meaningless)
+Monitor A2 ─────────> tied directly to GND (no real battery divider built yet)
+```
+
+Both A0 and A1 sit within millivolts of true ground regardless of the supply
+voltage, which is what makes this safe for a 3.3V-powered ADS1115.
+
+Getting A0/A1 backwards just flips the sign of the current reading — the
+firmware already detects and logs this rather than silently reporting
+garbage: `LOG monitor: negative power -- are the shunt's A0/A1 leads
+swapped?`. If you see that line, just swap A0 and A1.
+
+The shunt resistor pack, the breadboard, and jumper wires are the same ones
+from earlier bring-up — already assembled, ~2.5Ω (`board::
+SHUNT_RESISTANCE_OHMS`).
+
+## Firmware bugs found and fixed tonight (know these before debugging further)
+
+1. **`PIN_ENERGY_MARKER` (GPIO4) floating → serial flood.** `monitor/main.cpp`
+   originally set this pin to plain `INPUT`. Since nothing currently drives
+   it (the field-node/benchmark marker signal isn't wired up in this ad-hoc
+   rig), it floated and picked up electrical noise as a constant stream of
+   spurious edges — each one firing `report_interval()` and flooding the
+   115200-baud serial line with corrupted/truncated JSON. **Fixed**: changed
+   to `INPUT_PULLDOWN` so it reads a stable LOW at rest. Already reflashed
+   and confirmed clean.
+
+2. **`EVT `/`TRC ` prefixes silently dropped on gateway.** `firmware/lib/
+   sentinel_proto/src/{event,trace}.cpp`'s `to_evt_line()`/`to_trc_line()`
+   pre-populated a `String` with `"EVT "`/`"TRC "` and then called
+   `serializeJson(doc, out)` on the same string — but that call **overwrites**
+   the destination instead of appending to it, silently throwing away the
+   prefix. Every board using this shared library (`gateway`, `field_node`,
+   `attacker`, `benchmark`) has/had this bug — it just never surfaced before
+   tonight because this is the first time gateway's serial output has
+   actually been fed through the console's bridge parser instead of eyeballed
+   on a raw monitor. **Fixed** in both files: serialize into a fresh string
+   first, then prepend the tag. **As of the last message in this session,
+   gateway needed a re-flash to pick up this fix and it hadn't been
+   reconfirmed yet — check whether that happened before trusting gateway's
+   EVT/TRC lines.** field_node, attacker, and benchmark also need a reflash
+   to pick up this fix if their EVT/TRC output matters for anything you're
+   doing.
+
+## Console integration (already built, no firmware changes needed for this part)
+
+The console (`console/` — FastAPI + SQLite + React/Vite dashboard) already
+has a `bridge/serial_bridge.py` script built for exactly this: run one
+instance per board, it reads `EVT`/`TRC`/`NRG`/`LOG` lines off that board's
+serial port and POSTs them to the console API. Monitor's `NRG {...}` JSON
+line format is already fully compatible with the console's `/energy`
+endpoint (checked against `console/api/energy.py` — no firmware changes were
+needed there). Run it as:
+
+```
+cd console
+.venv\Scripts\python -m bridge.serial_bridge --port COMx -v
+```
+
+It also polls the console's `/control` endpoint and pushes `LABEL`/
+`DEFENSE`/`MODE` lines down to whatever board it's bridging — including
+**pushing the current state once immediately on startup**, which is why the
+cable-swap trick below works (set the dashboard's attack mode before you even
+plug attacker in; the moment its bridge starts, it catches up within about a
+second).
+
+## Demo cable plan (real constraint: only 2 data-capable USB cables, 1 USB
+port on the main laptop, no hub)
+
+Field node needs no cable (power-only, via the jumper above). That leaves
+three boards wanting connections with only two real cables:
+
+- **Cable 1 → Gateway → main laptop, permanent.** Drives the dashboard's live
+  detection feed and physical LED.
+- **Cable 2 → Monitor → main laptop (or a second laptop, bridging over the
+  network to the main laptop's IP with `--console http://<ip>:8000`),
+  permanent.** Drives the live energy graph — arguably the more important
+  visual for v4's "the battery, not the message, is the attack surface"
+  pitch.
+- **Attacker**: powered via any spare cable (data or charge-only, doesn't
+  matter — it just needs power). To trigger an attack: click the dashboard's
+  attack button (e.g. "Loud flood") first, then briefly swap cable 2 from
+  Monitor into attacker, start its bridge, wait ~1s for it to auto-push the
+  pending `MODE`, then unplug and put cable 2 back into Monitor. Attacker
+  keeps attacking autonomously over ESP-NOW after the cable's gone — no
+  laptop connection needed for the attack itself, only to deliver the
+  command. Repeat with "None" selected to stop it.
+
+If a COM port ever throws `PermissionError: Access is denied` mid-swap
+(happened twice tonight), the fix that worked both times: unplug the USB
+cable, wait a couple seconds, replug, retry. Usually a stuck PlatformIO
+monitor/upload session still holding the port, not a real hardware fault.
+
+## What's still open (pick up here)
+
+- **Field node has not yet been tested running on the gateway-jumper power
+  source** — it's only ever run on its own USB so far. First time powering it
+  this way, verify it boots and completes the ESP-NOW handshake with Gateway
+  before trusting anything downstream.
+- **Monitor has not yet measured real current.** With no load actually drawn
+  through the shunt in a live circuit, `amps` has read a flat `0.0000` all
+  night. Once field node is powered through the shunt and doing real work
+  (joining the mesh, running the handshake), this should become the first
+  real non-zero reading — that's the actual proof the rig works.
+- **Gateway's EVT/TRC reflash (bug #2 above) needs reconfirming** — verify
+  with a raw `pio device monitor --port COMx --baud 115200` that lines now
+  read `TRC {"ts":...}` / `EVT {"ts":...}` with the prefix intact before
+  trusting the bridge/dashboard output.
+
+---
+
+## Original plan (superseded above where they disagree, kept for context)
+
+Written 2026-09-18, before parts were in hand. The INA219 assumption, the
+3-board framing, and the battery-powered field node did not survive contact
+with actual hardware — see the corrected sections above. Kept here because
+the underlying reasoning (why Monitor is a separate board, why the sensor
+goes low-side of what it measures, the step-by-step bring-up philosophy) is
+still valid even where the specific parts changed.
+
+### Why four boards, not three
+
+The original `platformio.ini` only defined three environments —
+`field_node`, `gateway`, `attacker`. v4 added a fourth board, **Monitor**,
 whose only job is reading the energy sensor so the measurement never
 disturbs the node being measured (brief v4 §3's own reasoning: if the field
 node read its own current sensor, the act of reading would cost energy and
 contaminate the number).
 
-| Board | Role | Powered by |
-|---|---|---|
-| Field node | Runs the crypto, the thing being measured | 18650 cell, via the rig below |
-| Gateway | Receives the field node's traffic | USB (its battery life isn't the point) |
-| Attacker | Sends HELLO floods / slow drip **at the field node** (the gateway overhears them for its trace windows) | USB |
-| **Monitor (new)** | Reads the INA219, logs mJ per operation | USB (it's instrumentation) |
+### Bring-up philosophy
 
-## Power path — battery → field node
+Don't skip a verification step when bringing up new hardware — isolate one
+new variable at a time so a failure doesn't leave four things to debug at
+once. That principle is why tonight's actual bring-up went: fix the marker
+pin flood first (isolated, verified via raw serial), then diagnose the EVT/
+TRC prefix bug separately (isolated, verified via raw serial before touching
+the bridge again), rather than changing everything at once and guessing which
+change fixed what.
 
-```
-18650 cell (+) ──> INA219 (VIN+ → VIN-) ──> 18650 boost/charge shield ──> 5V/VIN pin ──> field node
-18650 cell (−) ──────────────────────────────────────────────────────> shield GND ──> field node GND
-```
+### Safety notes (still apply, cell or no cell)
 
-`board_config.h` already assumes "18650 on 5V shield" with a 100k/100k
-divider onto ADC pin 39 (`PIN_BATTERY_ADC`) for a coarse, self-reported
-battery percentage — that part predates v4 and stays as-is; it's a cheap
-secondary reading, not the measurement rig.
-
-**The INA219 goes on the raw battery lead, before the boost shield** — not
-on the shield's regulated 5V output. Brief v4 §3 is explicit about this
-("the INA219 measures current by sitting in series with the battery's
-positive line"), and it matters: a boost converter's own efficiency would
-otherwise get baked into every joule number without anyone noticing.
-
-## Measurement path — INA219 → Monitor board (separate from power)
-
-```
-INA219 SDA/SCL   ──> Monitor ESP32 I2C bus (pins 21/22 — same defaults board_config.h
-                                              already uses for the OLED/MPU6050 on the
-                                              other boards; nothing else is on the
-                                              Monitor's bus, so no address conflict)
-Field node GPIO  ──> Monitor ESP32 GPIO input   (pick an unused pin on each — e.g. GPIO 4
-                                                  on both — the field node raises it at an
-                                                  operation's start, lowers it at the end)
-Field node GND   ──> Monitor ESP32 GND          (REQUIRED — without a shared ground
-                                                  reference the GPIO marker reads garbage
-                                                  and I2C can misbehave, even though the
-                                                  two boards have separate power supplies)
-Monitor ESP32    ──> USB ──> laptop              (this is the board whose serial output
-                                                   you actually watch during a run)
-```
-
-## Bill of materials
-
-Brief v4 §10, cross-checked against what "already listed" means in this
-repo's own v3 BOM:
-
-| Item | Qty | Notes |
-|---|---|---|
-| ESP32-WROOM-32 dev board | 4 | 3 already accounted for (field_node/gateway/attacker); **1 new** for Monitor |
-| 18650 Li-ion cell + boost/charge shield | 1 | Already in the v3 BOM. **Use a protected cell**, or one with a protection PCB — bare 18650s have no over-discharge/short protection built in |
-| INA219 current/voltage sensor (I²C) | 1–2 | ~₹150–250 each. One is enough to start; a second on the gateway is optional/stretch per the brief |
-| Jumper wires, screw terminals or JST leads | 1 set | ~₹50–100, for putting the INA219 in series safely |
-
-## Safety notes
-
-- Double-check polarity before connecting the INA219 — modules are usually
-  silkscreened VIN+/VIN-. Reversed polarity on a shunt-based sensor is a
-  common way to get either nonsense readings or a damaged board.
-- **Never let the INA219's two leads touch each other or anything else**
-  while the battery is connected — that is a direct short across the cell.
-- Use a protected cell (see BOM above). If only a bare cell is available,
-  add an inline fuse or a protection module rather than skipping it.
-
-## Bring-up — one step at a time, verify before the next
-
-Don't skip a row. Each one isolates exactly one new variable, so a failure
-at step 5 doesn't leave four things to debug at once.
-
-| # | Do | Verify before moving on |
-|---|---|---|
-| 1 | `pio run -e benchmark -t upload -t monitor` to **one** board, USB power only, no battery/INA219 yet | Serial prints the `algo,op,us,heap_used_bytes,stack_hwm_bytes,ok` CSV and the board doesn't crash/reboot. This is firmware's own pre-v4 "biggest risk" — does ML-DSA-44 even fit — resolve it before energy numbers matter at all. |
-| 2 | Wire the INA219 to the Monitor board's I2C only (pins 21/22). Power the INA219 from a USB supply with a known load (an LED + resistor is enough). Flash a basic `Adafruit_INA219` library example | Serial prints plausible volts/mA for that known load — proves the sensor and I2C wiring are good, in isolation from every other unknown |
-| 3 | Move the INA219 in series with the real 18650 → boost shield → field node. **Disconnect USB from the field node** — battery only. Field node just runs idle/blink firmware, nothing else | Field node boots and stays up on battery alone; the Monitor's INA219 reading settles to a sane idle mA figure. This is the "idle/hourly baseline" row in the brief's measurement table (§3). |
-| 4 | Add the GPIO marker wire (field node → Monitor) and the shared GND. Flash a trivial sketch on the field node that just toggles the marker pin in a loop | Monitor sees clean, correctly-timed high/low edges — no floating or noisy transitions. Confirm this before trusting any per-operation energy number. |
-| 5 | Flash the real `env:benchmark` sketch to the field node (now on battery, with INA219 + marker wired), Monitor logging CSV alongside it | The Monitor's mJ readings line up in time with the benchmark's own `us` timings for each operation. This is the actual "measured energy budget" deliverable (brief §3) — ML-KEM keygen/encaps/decaps ×3 levels, ML-DSA-44 sign/verify, AES-256-GCM per KB, radio handshake per level. |
-| 6 | Only once step 5 is solid: bring in the gateway and attacker boards, wire up ESP-NOW, and move to the cookie challenge / token bucket / 5-row experiment (`docs/v4_energy_split.md`, Claude 3's section) | — |
-
-## Where this feeds back into the software streams
-
-- Step 1's benchmark CSV feeds directly into `firmware/src/benchmark/main.cpp`'s
-  existing output format — v4 extends its columns with `mJ`/`peak_current_mA`
-  sourced from the Monitor board (see `docs/v4_energy_split.md`, Claude 3 §1).
-- Step 5's correlated mJ-per-operation numbers are what the console's
-  battery chart and the brief's five-row experiment table (§6) are built
-  from — see Claude 2's section of the same doc.
-- None of this blocks `ml/`'s EnergyGate model work (Claude 1) or the
-  console's frontend work (Claude 2) — both build against synthetic/fixture
-  data first, per the stand-ins pattern this repo already uses everywhere.
+- Double-check polarity before connecting any current sensor — reversed
+  polarity on a shunt-based sensor is a common way to get either nonsense
+  readings or a damaged board.
+- If a real battery does get added later: never let its leads touch each
+  other or anything else while connected — that's a direct short. Use a
+  protected cell, or add an inline fuse/protection module if only a bare cell
+  is available.
