@@ -1,4 +1,4 @@
-# SentinelMesh 🛡️⚡
+# SentinelMesh ⚡
 ### Energy-Aware Security for Post-Quantum IoT: Deciding Who Is Worth the Battery
 
 [![Code Cortex 3.0](https://img.shields.io/badge/Hackathon-Code%20Cortex%203.0%20(Security%20Track)-blueviolet?style=flat-square)](https://github.com/ramkirangaruda/Sentinel-Mesh)
